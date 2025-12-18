@@ -1,20 +1,20 @@
-// VERSAO 4.1.0 - Integração com Groq Vision AI (Llama)
+// VERSAO 4.2.0 - Integração com OpenRouter (Qwen Vision)
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e IA
  * Desenvolvido com foco em acessibilidade para pessoas cegas
  */
 
-// Configuração do Groq - API Key armazenada localmente no navegador
-const GROQ_CONFIG = {
-    model: 'llama-3.2-11b-vision-preview',
-    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
+// Configuração do OpenRouter - API Key armazenada localmente no navegador
+const AI_CONFIG = {
+    model: 'qwen/qwen2.5-vl-72b-instruct:free',
+    apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
     getApiKey: function() {
-        let key = localStorage.getItem('groq_api_key');
+        let key = localStorage.getItem('openrouter_api_key');
         if (!key) {
-            key = prompt('Digite sua API Key do Groq (obtenha em console.groq.com/keys):');
+            key = prompt('Digite sua API Key do OpenRouter (obtenha em openrouter.ai/keys):');
             if (key) {
-                localStorage.setItem('groq_api_key', key);
+                localStorage.setItem('openrouter_api_key', key);
             }
         }
         return key;
@@ -511,10 +511,10 @@ class BloodPressureReader {
         // Capturar imagem como base64
         const imageData = this.canvas.toDataURL('image/jpeg', 0.8);
         
-        await this.analyzeWithGroq(imageData);
+        await this.analyzeWithAI(imageData);
     }
 
-    async analyzeWithGroq(imageDataUrl) {
+    async analyzeWithAI(imageDataUrl) {
         try {
             this.speak('Analisando imagem. Aguarde...');
             this.resultsContainer.innerHTML = '<p class="processing">Analisando com IA...</p>';
@@ -537,7 +537,7 @@ Se não conseguir ler os números claramente, retorne:
 Retorne SOMENTE o JSON, sem explicações adicionais.`;
 
             const requestBody = {
-                model: GROQ_CONFIG.model,
+                model: AI_CONFIG.model,
                 messages: [
                     {
                         role: 'user',
@@ -559,30 +559,32 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
                 max_tokens: 200
             };
 
-            const apiKey = GROQ_CONFIG.getApiKey();
+            const apiKey = AI_CONFIG.getApiKey();
             if (!apiKey) {
                 this.speak('API Key não configurada. Por favor, recarregue a página e insira sua chave.', true);
                 this.resultsContainer.innerHTML = '<p class="error">API Key não configurada.</p>';
                 return;
             }
 
-            const response = await fetch(GROQ_CONFIG.apiUrl, {
+            const response = await fetch(AI_CONFIG.apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`
+                    'Authorization': `Bearer ${apiKey}`,
+                    'HTTP-Referer': window.location.href,
+                    'X-Title': 'Leitor de Pressão Arterial'
                 },
                 body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('Erro Groq:', errorData);
+                console.error('Erro OpenRouter:', errorData);
                 throw new Error(`Erro na API: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('Resposta Groq:', data);
+            console.log('Resposta OpenRouter:', data);
 
             // Extrair o texto da resposta
             const responseText = data.choices?.[0]?.message?.content;
@@ -596,7 +598,7 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
             this.processAIResponse(responseText);
 
         } catch (error) {
-            console.error('Erro ao analisar com Groq:', error);
+            console.error('Erro ao analisar com OpenRouter:', error);
             this.speak('Erro ao analisar imagem. Verifique sua conexão e tente novamente.', true);
             this.resultsContainer.innerHTML = `<p class="error">Erro: ${error.message}. Tente novamente.</p>`;
         }
