@@ -2,13 +2,17 @@
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
  * Desenvolvido com foco em acessibilidade para pessoas cegas
- * 
- * VERSÃO 2.0 - Melhorias no OCR e detecção
  */
+
+// ===== VERSÃO =====
+const APP_VERSION = '2.1.0';
+const APP_BUILD_DATE = '2025-12-18';
 
 // ===== Classe Principal =====
 class BloodPressureReader {
     constructor() {
+        this.version = APP_VERSION;
+        
         // Elementos DOM
         this.video = document.getElementById('camera-feed');
         this.captureCanvas = document.getElementById('capture-canvas');
@@ -70,10 +74,56 @@ class BloodPressureReader {
     
     // ===== Inicialização =====
     async init() {
+        // Exibir versão no console e na tela
+        console.log(`🩺 Leitor de Pressão Arterial v${APP_VERSION} (${APP_BUILD_DATE})`);
+        this.showVersion();
+        
         this.bindEvents();
         this.setupKeyboardShortcuts();
+        
+        // Carregar vozes primeiro (importante!)
+        await this.loadVoices();
+        
         await this.initTesseract();
-        this.speak('Aplicativo de leitura de pressão arterial carregado. Pressione o botão Iniciar Câmera para começar.');
+        this.speak(`Versão ${APP_VERSION}. Aplicativo carregado. Pressione Iniciar Câmera.`);
+    }
+    
+    showVersion() {
+        // Adicionar versão no footer
+        const footer = document.querySelector('footer p');
+        if (footer) {
+            footer.innerHTML += ` | <strong>Versão ${APP_VERSION}</strong>`;
+        }
+        
+        // Adicionar badge de versão
+        const header = document.querySelector('header');
+        if (header) {
+            const versionBadge = document.createElement('div');
+            versionBadge.id = 'version-badge';
+            versionBadge.style.cssText = 'background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; margin-top: 8px; display: inline-block;';
+            versionBadge.textContent = `v${APP_VERSION}`;
+            versionBadge.setAttribute('aria-label', `Versão ${APP_VERSION}`);
+            header.appendChild(versionBadge);
+        }
+    }
+    
+    async loadVoices() {
+        return new Promise((resolve) => {
+            const voices = this.speechSynthesis.getVoices();
+            if (voices.length > 0) {
+                console.log('[VOZ] Vozes carregadas:', voices.length);
+                resolve(voices);
+            } else {
+                // Aguardar carregamento das vozes
+                this.speechSynthesis.onvoiceschanged = () => {
+                    const v = this.speechSynthesis.getVoices();
+                    console.log('[VOZ] Vozes carregadas (async):', v.length);
+                    resolve(v);
+                };
+                // Timeout de segurança
+                setTimeout(() => resolve([]), 2000);
+            }
+        });
     }
     
     bindEvents() {
@@ -108,19 +158,33 @@ class BloodPressureReader {
         });
     }
     
-    // ===== Síntese de Voz =====
+    // ===== Síntese de Voz (CORRIGIDA) =====
     speak(text, priority = false) {
+        // Log para debug
+        console.log('[VOZ] Tentando falar:', text);
+        
+        // Cancelar se prioritário
         if (priority) {
             this.speechSynthesis.cancel();
             this.speechQueue = [];
+            this.isSpeaking = false;
         }
         
         this.speechQueue.push(text);
-        this.processNextSpeech();
+        
+        // Forçar processamento
+        setTimeout(() => this.processNextSpeech(), 100);
     }
     
     processNextSpeech() {
-        if (this.isSpeaking || this.speechQueue.length === 0) return;
+        if (this.speechQueue.length === 0) return;
+        
+        // Verificar se o navegador está pronto
+        if (this.speechSynthesis.speaking || this.speechSynthesis.pending) {
+            // Tentar novamente em breve
+            setTimeout(() => this.processNextSpeech(), 200);
+            return;
+        }
         
         const text = this.speechQueue.shift();
         const utterance = new SpeechSynthesisUtterance(text);
@@ -130,21 +194,44 @@ class BloodPressureReader {
         utterance.pitch = this.config.speechPitch;
         utterance.volume = this.config.speechVolume;
         
+        // Buscar voz em português
         const voices = this.speechSynthesis.getVoices();
-        const ptVoice = voices.find(v => v.lang.startsWith('pt'));
-        if (ptVoice) utterance.voice = ptVoice;
+        const ptVoice = voices.find(v => v.lang.includes('pt-BR')) || 
+                        voices.find(v => v.lang.includes('pt')) ||
+                        voices[0];
+        if (ptVoice) {
+            utterance.voice = ptVoice;
+            console.log('[VOZ] Usando voz:', ptVoice.name);
+        }
         
-        utterance.onstart = () => { this.isSpeaking = true; };
+        utterance.onstart = () => { 
+            this.isSpeaking = true;
+            console.log('[VOZ] Iniciou fala');
+        };
+        
         utterance.onend = () => { 
-            this.isSpeaking = false; 
-            this.processNextSpeech(); 
-        };
-        utterance.onerror = () => { 
-            this.isSpeaking = false; 
-            this.processNextSpeech(); 
+            this.isSpeaking = false;
+            console.log('[VOZ] Terminou fala');
+            // Processar próximo item da fila
+            if (this.speechQueue.length > 0) {
+                setTimeout(() => this.processNextSpeech(), 100);
+            }
         };
         
-        this.speechSynthesis.speak(utterance);
+        utterance.onerror = (e) => { 
+            this.isSpeaking = false;
+            console.error('[VOZ] Erro:', e.error);
+            // Tentar próximo mesmo com erro
+            if (this.speechQueue.length > 0) {
+                setTimeout(() => this.processNextSpeech(), 100);
+            }
+        };
+        
+        try {
+            this.speechSynthesis.speak(utterance);
+        } catch (e) {
+            console.error('[VOZ] Exceção ao falar:', e);
+        }
     }
     
     // ===== Inicialização do Tesseract =====
