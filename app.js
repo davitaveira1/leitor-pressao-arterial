@@ -1,4 +1,4 @@
-// VERSAO 2.9.0 - Fallback para diferentes vozes e idiomas
+// VERSAO 3.0.0 - Fallback com ResponsiveVoice API
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -34,6 +34,7 @@ class BloodPressureReader {
         this.selectedVoice = null;
         this.voiceEnabled = false;
         this.voicesLoaded = false;
+        this.useResponsiveVoice = false; // Fallback flag
         
         this.init();
     }
@@ -120,87 +121,84 @@ class BloodPressureReader {
         const voices = this.speechSynthesis.getVoices();
         console.log('Vozes disponíveis:', voices.map(v => `${v.name} (${v.lang})`));
         
-        // Tentar falar com fallback
-        this.speakWithFallback('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+        // Tentar falar com Web Speech API primeiro
+        this.trySpeechSynthesis('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
     }
 
-    // Tenta falar com múltiplos fallbacks
-    speakWithFallback(text) {
-        const voices = this.speechSynthesis.getVoices();
-        
-        // Ordem de preferência de idiomas
-        const langPreferences = ['pt-BR', 'pt-PT', 'pt', 'es-ES', 'es', 'en-US', 'en'];
-        
-        let voiceToUse = null;
-        
-        // Tentar encontrar uma voz que funcione
-        for (const lang of langPreferences) {
-            voiceToUse = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
-            if (voiceToUse) {
-                console.log('Usando voz:', voiceToUse.name, voiceToUse.lang);
-                break;
-            }
-        }
-        
-        this.trySpeak(text, voiceToUse, 0);
-    }
-
-    // Tenta falar com retry
-    trySpeak(text, voice, attempt) {
-        if (attempt >= 3) {
-            console.log('Falha após 3 tentativas. Verificar configurações de voz do dispositivo.');
-            alert('Não foi possível ativar a voz. Verifique se o "Google Text-to-Speech" está instalado e atualizado no seu dispositivo.');
-            return;
-        }
-
-        this.speechSynthesis.cancel();
-        
+    // Tenta Web Speech API, se falhar usa ResponsiveVoice
+    trySpeechSynthesis(text) {
         const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 0.9;
         
-        // Na primeira tentativa, usar pt-BR
-        // Na segunda, usar a voz encontrada
-        // Na terceira, não especificar voz (usar padrão do sistema)
-        if (attempt === 0) {
-            utterance.lang = 'pt-BR';
-            if (this.selectedVoice) {
-                utterance.voice = this.selectedVoice;
-            }
-        } else if (attempt === 1 && voice) {
-            utterance.voice = voice;
-            utterance.lang = voice.lang;
-        } else {
-            // Tentativa sem especificar voz - usa padrão
-            utterance.lang = 'en-US';
+        if (this.selectedVoice) {
+            utterance.voice = this.selectedVoice;
         }
         
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        
-        console.log(`Tentativa ${attempt + 1}: lang=${utterance.lang}, voice=${utterance.voice?.name || 'padrão'}`);
+        let speechStarted = false;
         
         utterance.onstart = () => {
-            console.log('Fala iniciada com sucesso!');
-        };
-        
-        utterance.onend = () => {
-            console.log('Fala terminada');
+            speechStarted = true;
+            console.log('Web Speech API funcionou!');
         };
         
         utterance.onerror = (e) => {
-            console.log(`Erro tentativa ${attempt + 1}:`, e.error);
-            // Tentar novamente com próxima configuração
-            setTimeout(() => {
-                this.trySpeak(text, voice, attempt + 1);
-            }, 500);
+            console.log('Web Speech API falhou:', e.error);
+            if (!speechStarted) {
+                console.log('Ativando ResponsiveVoice como fallback...');
+                this.useResponsiveVoice = true;
+                this.speakWithResponsiveVoice(text);
+            }
         };
         
         this.speechSynthesis.speak(utterance);
+        
+        // Timeout de segurança - se não começar em 2s, usar fallback
+        setTimeout(() => {
+            if (!speechStarted && !this.useResponsiveVoice) {
+                console.log('Timeout - ativando ResponsiveVoice');
+                this.speechSynthesis.cancel();
+                this.useResponsiveVoice = true;
+                this.speakWithResponsiveVoice(text);
+            }
+        }, 2000);
     }
 
-    // Fala direta sem usar a fila - para garantir funcionamento no mobile
+    // Fallback usando ResponsiveVoice (API externa gratuita)
+    speakWithResponsiveVoice(text) {
+        if (typeof responsiveVoice !== 'undefined') {
+            responsiveVoice.speak(text, "Brazilian Portuguese Female", {
+                pitch: 1,
+                rate: 0.9,
+                volume: 1,
+                onstart: () => console.log('ResponsiveVoice iniciou'),
+                onend: () => console.log('ResponsiveVoice terminou'),
+                onerror: (e) => console.log('ResponsiveVoice erro:', e)
+            });
+        } else {
+            console.log('ResponsiveVoice não carregado, tentando carregar...');
+            // Carregar ResponsiveVoice dinamicamente
+            const script = document.createElement('script');
+            script.src = 'https://code.responsivevoice.org/responsivevoice.js?key=FREE';
+            script.onload = () => {
+                setTimeout(() => {
+                    this.speakWithResponsiveVoice(text);
+                }, 500);
+            };
+            script.onerror = () => {
+                alert('Não foi possível carregar o sistema de voz. Verifique sua conexão com a internet.');
+            };
+            document.head.appendChild(script);
+        }
+    }
+
+    // Método principal de fala - escolhe automaticamente o melhor método
     speakDirect(text) {
-        this.speakWithFallback(text);
+        if (this.useResponsiveVoice) {
+            this.speakWithResponsiveVoice(text);
+        } else {
+            this.trySpeechSynthesis(text);
+        }
     }
 
     loadVoices() {
@@ -212,7 +210,11 @@ class BloodPressureReader {
         if (!this.voiceEnabled) return;
         
         if (priority) {
-            this.speechSynthesis.cancel();
+            if (this.useResponsiveVoice && typeof responsiveVoice !== 'undefined') {
+                responsiveVoice.cancel();
+            } else {
+                this.speechSynthesis.cancel();
+            }
             this.speechQueue = [];
         }
         
@@ -224,6 +226,24 @@ class BloodPressureReader {
         if (this.isSpeaking || this.speechQueue.length === 0) return;
         
         const text = this.speechQueue.shift();
+        
+        // Usar ResponsiveVoice se Web Speech API falhou
+        if (this.useResponsiveVoice && typeof responsiveVoice !== 'undefined') {
+            this.isSpeaking = true;
+            responsiveVoice.speak(text, "Brazilian Portuguese Female", {
+                rate: 0.9,
+                onend: () => {
+                    this.isSpeaking = false;
+                    this.processNextSpeech();
+                },
+                onerror: () => {
+                    this.isSpeaking = false;
+                    this.processNextSpeech();
+                }
+            });
+            return;
+        }
+        
         const utterance = new SpeechSynthesisUtterance(text);
         
         if (this.selectedVoice) {
@@ -247,7 +267,14 @@ class BloodPressureReader {
         utterance.onerror = (event) => {
             console.log('Erro na fala:', event.error);
             this.isSpeaking = false;
-            this.processNextSpeech();
+            // Se Web Speech falhar, mudar para ResponsiveVoice
+            if (!this.useResponsiveVoice) {
+                this.useResponsiveVoice = true;
+                this.speechQueue.unshift(text); // Recolocar na fila
+                this.speakWithResponsiveVoice(text);
+            } else {
+                this.processNextSpeech();
+            }
         };
         
         // Workaround para Chrome mobile
