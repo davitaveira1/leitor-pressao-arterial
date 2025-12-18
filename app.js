@@ -1,4 +1,4 @@
-// VERSAO 2.8.0 - Workaround agressivo para Chrome Android
+// VERSAO 2.9.0 - Fallback para diferentes vozes e idiomas
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -116,58 +116,91 @@ class BloodPressureReader {
         this.voiceEnabled = true;
         this.hideVoiceModal();
         
-        // Forçar cancelamento e reset completo
-        this.speechSynthesis.cancel();
+        // Listar todas as vozes disponíveis para debug
+        const voices = this.speechSynthesis.getVoices();
+        console.log('Vozes disponíveis:', voices.map(v => `${v.name} (${v.lang})`));
         
-        // Técnica que funciona no Chrome Android: criar utterance vazia primeiro
-        const warmup = new SpeechSynthesisUtterance('');
-        this.speechSynthesis.speak(warmup);
-        this.speechSynthesis.cancel();
-        
-        // Agora falar de verdade após o "warmup"
-        setTimeout(() => {
-            this.speakDirect('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
-        }, 250);
+        // Tentar falar com fallback
+        this.speakWithFallback('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
     }
 
-    // Fala direta sem usar a fila - para garantir funcionamento no mobile
-    speakDirect(text) {
-        // Cancelar qualquer coisa pendente
+    // Tenta falar com múltiplos fallbacks
+    speakWithFallback(text) {
+        const voices = this.speechSynthesis.getVoices();
+        
+        // Ordem de preferência de idiomas
+        const langPreferences = ['pt-BR', 'pt-PT', 'pt', 'es-ES', 'es', 'en-US', 'en'];
+        
+        let voiceToUse = null;
+        
+        // Tentar encontrar uma voz que funcione
+        for (const lang of langPreferences) {
+            voiceToUse = voices.find(v => v.lang.startsWith(lang.split('-')[0]));
+            if (voiceToUse) {
+                console.log('Usando voz:', voiceToUse.name, voiceToUse.lang);
+                break;
+            }
+        }
+        
+        this.trySpeak(text, voiceToUse, 0);
+    }
+
+    // Tenta falar com retry
+    trySpeak(text, voice, attempt) {
+        if (attempt >= 3) {
+            console.log('Falha após 3 tentativas. Verificar configurações de voz do dispositivo.');
+            alert('Não foi possível ativar a voz. Verifique se o "Google Text-to-Speech" está instalado e atualizado no seu dispositivo.');
+            return;
+        }
+
         this.speechSynthesis.cancel();
         
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'pt-BR';
+        
+        // Na primeira tentativa, usar pt-BR
+        // Na segunda, usar a voz encontrada
+        // Na terceira, não especificar voz (usar padrão do sistema)
+        if (attempt === 0) {
+            utterance.lang = 'pt-BR';
+            if (this.selectedVoice) {
+                utterance.voice = this.selectedVoice;
+            }
+        } else if (attempt === 1 && voice) {
+            utterance.voice = voice;
+            utterance.lang = voice.lang;
+        } else {
+            // Tentativa sem especificar voz - usa padrão
+            utterance.lang = 'en-US';
+        }
+        
         utterance.rate = 0.9;
         utterance.pitch = 1;
         utterance.volume = 1;
         
-        if (this.selectedVoice) {
-            utterance.voice = this.selectedVoice;
-        }
+        console.log(`Tentativa ${attempt + 1}: lang=${utterance.lang}, voice=${utterance.voice?.name || 'padrão'}`);
         
-        // Log para debug
-        console.log('Tentando falar:', text);
-        console.log('Estado speechSynthesis - paused:', this.speechSynthesis.paused, 'speaking:', this.speechSynthesis.speaking);
+        utterance.onstart = () => {
+            console.log('Fala iniciada com sucesso!');
+        };
         
-        utterance.onstart = () => console.log('Fala iniciada');
-        utterance.onend = () => console.log('Fala terminada');
-        utterance.onerror = (e) => console.log('Erro na fala:', e.error);
+        utterance.onend = () => {
+            console.log('Fala terminada');
+        };
         
-        // Forçar resume antes de falar (bug do Chrome Android)
-        this.speechSynthesis.resume();
+        utterance.onerror = (e) => {
+            console.log(`Erro tentativa ${attempt + 1}:`, e.error);
+            // Tentar novamente com próxima configuração
+            setTimeout(() => {
+                this.trySpeak(text, voice, attempt + 1);
+            }, 500);
+        };
+        
         this.speechSynthesis.speak(utterance);
-        
-        // Workaround: forçar resume repetidamente por um curto período
-        let attempts = 0;
-        const forceResume = setInterval(() => {
-            if (this.speechSynthesis.paused) {
-                this.speechSynthesis.resume();
-            }
-            attempts++;
-            if (attempts > 10 || this.speechSynthesis.speaking) {
-                clearInterval(forceResume);
-            }
-        }, 100);
+    }
+
+    // Fala direta sem usar a fila - para garantir funcionamento no mobile
+    speakDirect(text) {
+        this.speakWithFallback(text);
     }
 
     loadVoices() {
