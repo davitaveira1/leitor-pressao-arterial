@@ -1,4 +1,4 @@
-// VERSAO 3.3.0 - Web Speech API com configuracao otimizada para Android
+// VERSAO 3.4.0 - OCR otimizado para displays 7-segmentos
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -490,12 +490,74 @@ class BloodPressureReader {
         
         this.speak('Capturando imagem...', true);
         
-        const ctx = this.canvas.getContext('2d');
+        const ctx = this.canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(this.video, 0, 0);
         
-        const imageData = this.canvas.toDataURL('image/png');
+        // Pré-processar imagem para melhorar OCR de displays 7-segmentos
+        const processedImageData = this.preprocessImage(ctx);
         
-        await this.performOCR(imageData);
+        await this.performOCR(processedImageData);
+    }
+
+    // Pré-processamento de imagem para displays de 7 segmentos
+    preprocessImage(ctx) {
+        const width = this.canvas.width;
+        const height = this.canvas.height;
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        // 1. Converter para escala de cinza e aumentar contraste
+        for (let i = 0; i < data.length; i += 4) {
+            // Escala de cinza
+            const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            
+            // Aumentar contraste
+            const contrast = 1.5;
+            const factor = (259 * (contrast * 100 + 255)) / (255 * (259 - contrast * 100));
+            let newGray = factor * (gray - 128) + 128;
+            newGray = Math.max(0, Math.min(255, newGray));
+            
+            data[i] = newGray;     // R
+            data[i + 1] = newGray; // G
+            data[i + 2] = newGray; // B
+        }
+        
+        // 2. Binarização (threshold adaptativo)
+        // Calcular threshold médio
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            sum += data[i];
+        }
+        const avgBrightness = sum / (data.length / 4);
+        const threshold = avgBrightness * 0.6; // Threshold adaptativo
+        
+        // Aplicar binarização - dígitos escuros em fundo claro
+        for (let i = 0; i < data.length; i += 4) {
+            const value = data[i] < threshold ? 0 : 255;
+            data[i] = value;
+            data[i + 1] = value;
+            data[i + 2] = value;
+        }
+        
+        // 3. Inverter se necessário (OCR funciona melhor com texto preto em fundo branco)
+        // Contar pixels pretos vs brancos
+        let blackPixels = 0;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i] === 0) blackPixels++;
+        }
+        
+        // Se mais da metade é preta, inverter (assumindo que dígitos são minoria)
+        if (blackPixels > (data.length / 4) / 2) {
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = 255 - data[i];
+                data[i + 1] = 255 - data[i + 1];
+                data[i + 2] = 255 - data[i + 2];
+            }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
+        return this.canvas.toDataURL('image/png');
     }
 
     async performOCR(imageData) {
@@ -504,6 +566,7 @@ class BloodPressureReader {
             
             this.resultsContainer.innerHTML = '<p class="processing">Processando...</p>';
             
+            // Configurações otimizadas para dígitos de displays
             const result = await Tesseract.recognize(
                 imageData,
                 'eng',
@@ -511,14 +574,18 @@ class BloodPressureReader {
                     logger: m => {
                         if (m.status === 'recognizing text') {
                             const progress = Math.round(m.progress * 100);
-                            if (progress % 25 === 0) {
+                            if (progress % 50 === 0) {
                                 console.log(`Progresso: ${progress}%`);
                             }
                         }
-                    }
+                    },
+                    // Configurações para melhor reconhecimento de dígitos
+                    tessedit_char_whitelist: '0123456789',
+                    tessedit_pageseg_mode: '6', // Assume um bloco uniforme de texto
                 }
             );
             
+            console.log('Texto reconhecido:', result.data.text);
             this.processOCRResult(result.data.text);
             
         } catch (error) {
@@ -529,31 +596,85 @@ class BloodPressureReader {
     }
 
     processOCRResult(text) {
-        console.log('Texto reconhecido:', text);
+        console.log('Texto bruto:', text);
         
-        const numbers = text.match(/\d+/g);
+        // Limpar texto - remover espaços e caracteres não numéricos
+        const cleanText = text.replace(/[^0-9\s]/g, '');
+        console.log('Texto limpo:', cleanText);
         
-        if (!numbers || numbers.length < 2) {
+        // Extrair todos os números
+        const numbers = cleanText.match(/\d+/g);
+        console.log('Números encontrados:', numbers);
+        
+        if (!numbers || numbers.length < 1) {
             this.speak('Não foi possível identificar os valores. Reposicione o medidor e tente novamente.', true);
             this.resultsContainer.innerHTML = '<p class="error">Valores não identificados. Tente novamente.</p>';
             return;
         }
         
+        // Filtrar números válidos para pressão arterial
+        // Sistólica: 60-250, Diastólica: 30-150, Pulso: 30-200
         const validNumbers = numbers
             .map(n => parseInt(n))
             .filter(n => n >= 30 && n <= 250);
         
+        console.log('Números válidos:', validNumbers);
+        
         if (validNumbers.length < 2) {
+            // Tentar extrair dígitos individuais e combinar
+            const digits = cleanText.replace(/\s/g, '').match(/\d/g);
+            if (digits && digits.length >= 4) {
+                // Tentar formar números de 2-3 dígitos
+                const possibleNumbers = this.extractPossibleNumbers(digits);
+                console.log('Números possíveis extraídos:', possibleNumbers);
+                
+                if (possibleNumbers.length >= 2) {
+                    this.processExtractedNumbers(possibleNumbers);
+                    return;
+                }
+            }
+            
             this.speak('Valores fora do esperado. Reposicione o medidor e tente novamente.', true);
             this.resultsContainer.innerHTML = '<p class="error">Valores inválidos. Tente novamente.</p>';
             return;
         }
         
+        this.processExtractedNumbers(validNumbers);
+    }
+
+    // Tenta extrair números possíveis de dígitos soltos
+    extractPossibleNumbers(digits) {
+        const numbers = [];
+        const digitStr = digits.join('');
+        
+        // Tentar combinações de 2 e 3 dígitos
+        for (let len = 3; len >= 2; len--) {
+            for (let i = 0; i <= digitStr.length - len; i++) {
+                const num = parseInt(digitStr.substring(i, i + len));
+                if (num >= 30 && num <= 250) {
+                    numbers.push(num);
+                }
+            }
+        }
+        
+        // Remover duplicatas e ordenar
+        return [...new Set(numbers)].sort((a, b) => b - a);
+    }
+
+    processExtractedNumbers(validNumbers) {
+        // Ordenar do maior para menor
         validNumbers.sort((a, b) => b - a);
         
         const systolic = validNumbers[0];
         const diastolic = validNumbers[1];
         const pulse = validNumbers[2] || null;
+        
+        // Validação adicional: sistólica deve ser maior que diastólica
+        if (systolic <= diastolic) {
+            this.speak('Valores parecem incorretos. Tente novamente.', true);
+            this.resultsContainer.innerHTML = '<p class="error">Valores inconsistentes. Tente novamente.</p>';
+            return;
+        }
         
         this.lastReading = { systolic, diastolic, pulse };
         this.displayAndAnnounceResults(systolic, diastolic, pulse);
