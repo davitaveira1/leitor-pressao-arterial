@@ -512,7 +512,7 @@ class BloodPressureReader {
 
     async analyzeWithGemini(imageDataUrl) {
         try {
-            this.speak('Analisando imagem com inteligência artificial. Aguarde...');
+            this.speak('Analisando imagem. Aguarde...');
             this.resultsContainer.innerHTML = '<p class="processing">Analisando com IA...</p>';
             
             // Remover o prefixo "data:image/jpeg;base64," para enviar só o base64
