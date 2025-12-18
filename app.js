@@ -8,7 +8,7 @@
 // Configuração do Gemini
 const GEMINI_CONFIG = {
     apiKey: 'AIzaSyASHpH7dB6uu9_GlKc3NVCyXE-ilHZIGPo',
-    model: 'gemini-2.0-flash-exp',
+    model: 'gemini-1.5-flash',
     apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
 };
 
