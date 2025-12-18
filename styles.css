@@ -614,3 +614,59 @@ kbd {
         transition-duration: 0.01ms !important;
     }
 }
+
+/* ===== Modal de Ativação de Voz ===== */
+.voice-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+}
+
+.voice-modal.active {
+    display: flex;
+}
+
+.voice-modal-content {
+    background: var(--card-bg);
+    padding: 2rem;
+    border-radius: var(--border-radius);
+    text-align: center;
+    max-width: 90%;
+    width: 400px;
+    box-shadow: var(--shadow-lg);
+}
+
+.voice-modal-content h2 {
+    margin-bottom: 1rem;
+    color: var(--primary-color);
+}
+
+.voice-modal-content p {
+    margin-bottom: 1.5rem;
+    color: var(--text-secondary);
+}
+
+.voice-modal-content .btn {
+    width: 100%;
+    padding: 1.5rem;
+    font-size: 1.25rem;
+}
+
+/* ===== Footer Visibilidade ===== */
+footer {
+    position: relative;
+    z-index: 1;
+    margin-top: auto;
+}
+
+#app-version {
+    font-weight: bold;
+    color: var(--primary-color);
+}

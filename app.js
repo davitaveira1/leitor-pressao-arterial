@@ -1,4 +1,4 @@
-// VERSAO 2.5.0 - Codigo recriado com codificacao UTF-8 correta
+// VERSAO 2.6.0 - Correcao de voz para dispositivos moveis
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -19,6 +19,9 @@ class BloodPressureReader {
         this.autoModeBtn = document.getElementById('auto-mode-btn');
         this.repeatBtn = document.getElementById('repeat-btn');
         
+        this.voiceModal = document.getElementById('voice-modal');
+        this.enableVoiceBtn = document.getElementById('enable-voice-btn');
+        
         this.stream = null;
         this.isAutoMode = false;
         this.autoModeInterval = null;
@@ -29,8 +32,15 @@ class BloodPressureReader {
         this.isSpeaking = false;
         this.speechSynthesis = window.speechSynthesis;
         this.selectedVoice = null;
+        this.voiceEnabled = false;
         
         this.init();
+    }
+
+    isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+               ('ontouchstart' in window) ||
+               (navigator.maxTouchPoints > 0);
     }
 
     async init() {
@@ -41,9 +51,43 @@ class BloodPressureReader {
             this.speechSynthesis.onvoiceschanged = () => this.loadVoices();
         }
         
-        setTimeout(() => {
-            this.speak('Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
-        }, 1000);
+        // Em dispositivos móveis, mostrar modal para ativar voz
+        if (this.isMobileDevice()) {
+            this.showVoiceModal();
+        } else {
+            this.voiceEnabled = true;
+            setTimeout(() => {
+                this.speak('Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+            }, 1000);
+        }
+    }
+
+    showVoiceModal() {
+        if (this.voiceModal) {
+            this.voiceModal.classList.add('active');
+        }
+    }
+
+    hideVoiceModal() {
+        if (this.voiceModal) {
+            this.voiceModal.classList.remove('active');
+        }
+    }
+
+    enableVoice() {
+        this.voiceEnabled = true;
+        this.hideVoiceModal();
+        
+        // Falar imediatamente após ativação do usuário
+        const utterance = new SpeechSynthesisUtterance('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+        utterance.lang = 'pt-BR';
+        utterance.rate = 0.9;
+        
+        if (this.selectedVoice) {
+            utterance.voice = this.selectedVoice;
+        }
+        
+        this.speechSynthesis.speak(utterance);
     }
 
     loadVoices() {
@@ -60,6 +104,8 @@ class BloodPressureReader {
     }
 
     speak(text, priority = false) {
+        if (!this.voiceEnabled) return;
+        
         if (priority) {
             this.speechSynthesis.cancel();
             this.speechQueue = [];
@@ -106,6 +152,11 @@ class BloodPressureReader {
         this.captureBtn.addEventListener('click', () => this.captureAndRead());
         this.autoModeBtn.addEventListener('click', () => this.toggleAutoMode());
         this.repeatBtn.addEventListener('click', () => this.repeatLastReading());
+        
+        // Botão de ativar voz para dispositivos móveis
+        if (this.enableVoiceBtn) {
+            this.enableVoiceBtn.addEventListener('click', () => this.enableVoice());
+        }
 
         document.addEventListener('keydown', (e) => {
             switch(e.key) {

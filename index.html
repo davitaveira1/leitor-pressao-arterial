@@ -127,9 +127,21 @@
     </main>
 
     <footer role="contentinfo">
-        <p>Versão 2.5.0 - Leitor de Pressão Arterial Acessível</p>
+        <p id="app-version">Versão 2.6.0 - Leitor de Pressão Arterial Acessível</p>
         <p>Desenvolvido para auxiliar pessoas com deficiência visual</p>
     </footer>
+
+    <!-- Modal de ativação de voz para dispositivos móveis -->
+    <div id="voice-modal" class="voice-modal" role="dialog" aria-labelledby="voice-modal-title" aria-modal="true">
+        <div class="voice-modal-content">
+            <h2 id="voice-modal-title">Ativar Recursos de Voz</h2>
+            <p>Para ouvir as instruções e resultados, toque no botão abaixo:</p>
+            <button id="enable-voice-btn" class="btn btn-primary btn-large">
+                <span class="btn-icon" aria-hidden="true">🔊</span>
+                Ativar Voz
+            </button>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
     <script src="app.js"></script>
