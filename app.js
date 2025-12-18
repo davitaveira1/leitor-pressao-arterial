@@ -5,7 +5,7 @@
  */
 
 // ===== VERSÃO =====
-const APP_VERSION = '2.2.0';
+const APP_VERSION = '2.3.0';
 const APP_BUILD_DATE = '2025-12-18';
 
 // ===== Classe Principal =====
@@ -81,11 +81,12 @@ class BloodPressureReader {
         this.bindEvents();
         this.setupKeyboardShortcuts();
         
-        // Carregar vozes primeiro (importante!)
-        await this.loadVoices();
-        
         await this.initTesseract();
-        this.speak(`Versão ${APP_VERSION}. Aplicativo carregado. Pressione Iniciar Câmera.`);
+        
+        // Falar após um pequeno delay para garantir que as vozes carregaram
+        setTimeout(() => {
+            this.speak('Aplicativo de leitura de pressão arterial carregado. Pressione o botão Iniciar Câmera para começar.');
+        }, 1000);
     }
     
     showVersion() {
@@ -105,25 +106,6 @@ class BloodPressureReader {
             versionBadge.setAttribute('aria-label', `Versão ${APP_VERSION}`);
             header.appendChild(versionBadge);
         }
-    }
-    
-    async loadVoices() {
-        return new Promise((resolve) => {
-            const voices = this.speechSynthesis.getVoices();
-            if (voices.length > 0) {
-                console.log('[VOZ] Vozes carregadas:', voices.length);
-                resolve(voices);
-            } else {
-                // Aguardar carregamento das vozes
-                this.speechSynthesis.onvoiceschanged = () => {
-                    const v = this.speechSynthesis.getVoices();
-                    console.log('[VOZ] Vozes carregadas (async):', v.length);
-                    resolve(v);
-                };
-                // Timeout de segurança
-                setTimeout(() => resolve([]), 2000);
-            }
-        });
     }
     
     bindEvents() {
@@ -169,55 +151,55 @@ class BloodPressureReader {
         });
     }
     
-    // ===== Síntese de Voz (v2.2 - SIMPLIFICADA) =====
+    // ===== Síntese de Voz (ORIGINAL v1.0 - FUNCIONAVA) =====
     speak(text, priority = false) {
-        console.log('[VOZ v2.2] Falar:', text);
-        
-        // Cancelar fala anterior se prioritário
-        if (priority && window.speechSynthesis) {
-            window.speechSynthesis.cancel();
+        if (priority) {
+            // Cancelar fala atual e limpar fila
+            this.speechSynthesis.cancel();
+            this.speechQueue = [];
         }
         
-        // Usar função global simples
-        this.speakDirect(text);
+        this.speechQueue.push(text);
+        this.processNextSpeech();
     }
     
-    speakDirect(text) {
-        // Verificar suporte
-        if (!('speechSynthesis' in window)) {
-            console.error('[VOZ] Navegador não suporta síntese de voz');
-            alert('Seu navegador não suporta síntese de voz');
-            return;
-        }
+    processNextSpeech() {
+        if (this.isSpeaking || this.speechQueue.length === 0) return;
         
-        // Criar utterance
+        const text = this.speechQueue.shift();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'pt-BR';
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 1;
         
-        // Tentar encontrar voz em português
-        const voices = window.speechSynthesis.getVoices();
-        console.log('[VOZ] Vozes disponíveis:', voices.length);
+        utterance.lang = this.config.language;
+        utterance.rate = this.config.speechRate;
+        utterance.pitch = this.config.speechPitch;
+        utterance.volume = this.config.speechVolume;
         
-        for (const voice of voices) {
-            if (voice.lang.includes('pt')) {
-                utterance.voice = voice;
-                console.log('[VOZ] Usando:', voice.name, voice.lang);
-                break;
-            }
-        }
+        // Tentar usar voz em português
+        const voices = this.speechSynthesis.getVoices();
+        const ptVoice = voices.find(v => v.lang.startsWith('pt'));
+        if (ptVoice) utterance.voice = ptVoice;
         
-        // Eventos de debug
-        utterance.onstart = () => console.log('[VOZ] Começou a falar');
-        utterance.onend = () => console.log('[VOZ] Terminou de falar');
-        utterance.onerror = (e) => console.error('[VOZ] ERRO:', e);
+        utterance.onstart = () => {
+            this.isSpeaking = true;
+        };
         
-        // Falar
-        window.speechSynthesis.speak(utterance);
+        utterance.onend = () => {
+            this.isSpeaking = false;
+            this.processNextSpeech();
+        };
+        
+        utterance.onerror = () => {
+            this.isSpeaking = false;
+            this.processNextSpeech();
+        };
+        
+        this.speechSynthesis.speak(utterance);
     }
     
+    testVoice() {
+        console.log('[VOZ] Teste de voz acionado pelo usuário');
+        this.speak('Teste de voz. Se você está ouvindo esta mensagem, a voz está funcionando corretamente. Versão ' + APP_VERSION);
+    }
     processNextSpeech() {
         // Mantido para compatibilidade mas não usado
     }
