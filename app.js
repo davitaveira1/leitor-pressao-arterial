@@ -7,7 +7,7 @@
 
 // Configuração do OpenRouter - API Key armazenada localmente no navegador
 const AI_CONFIG = {
-    model: 'meta-llama/llama-3.2-11b-vision-instruct:free',
+    model: 'qwen/qwen2.5-vl-7b-instruct:free',
     apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
     getApiKey: function() {
         let key = localStorage.getItem('openrouter_api_key');
