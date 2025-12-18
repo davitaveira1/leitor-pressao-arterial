@@ -1,15 +1,24 @@
-// VERSAO 4.0.0 - Integração com Google Gemini Vision AI
+// VERSAO 4.1.0 - Integração com Groq Vision AI (Llama)
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e IA
  * Desenvolvido com foco em acessibilidade para pessoas cegas
  */
 
-// Configuração do Gemini
-const GEMINI_CONFIG = {
-    apiKey: 'AIzaSyASHpH7dB6uu9_GlKc3NVCyXE-ilHZIGPo',
-    model: 'gemini-2.0-flash',
-    apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
+// Configuração do Groq - API Key armazenada localmente no navegador
+const GROQ_CONFIG = {
+    model: 'llama-3.2-90b-vision-preview',
+    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    getApiKey: function() {
+        let key = localStorage.getItem('groq_api_key');
+        if (!key) {
+            key = prompt('Digite sua API Key do Groq (obtenha em console.groq.com/keys):');
+            if (key) {
+                localStorage.setItem('groq_api_key', key);
+            }
+        }
+        return key;
+    }
 };
 
 class BloodPressureReader {
@@ -41,7 +50,6 @@ class BloodPressureReader {
         this.selectedVoice = null;
         this.voiceEnabled = false;
         this.voicesLoaded = false;
-        this.useGemini = true; // Usar Gemini como padrão
         
         this.init();
     }
@@ -503,23 +511,16 @@ class BloodPressureReader {
         // Capturar imagem como base64
         const imageData = this.canvas.toDataURL('image/jpeg', 0.8);
         
-        if (this.useGemini) {
-            await this.analyzeWithGemini(imageData);
-        } else {
-            await this.performOCR(imageData);
-        }
+        await this.analyzeWithGroq(imageData);
     }
 
-    async analyzeWithGemini(imageDataUrl) {
+    async analyzeWithGroq(imageDataUrl) {
         try {
             this.speak('Analisando imagem. Aguarde...');
             this.resultsContainer.innerHTML = '<p class="processing">Analisando com IA...</p>';
             
-            // Remover o prefixo "data:image/jpeg;base64," para enviar só o base64
-            const base64Image = imageDataUrl.split(',')[1];
-            
             const prompt = `Analise esta imagem de um medidor de pressão arterial digital.
-            
+
 IMPORTANTE: Leia os números exibidos no display LCD/LED do aparelho.
 
 Retorne APENAS um JSON no formato:
@@ -536,45 +537,55 @@ Se não conseguir ler os números claramente, retorne:
 Retorne SOMENTE o JSON, sem explicações adicionais.`;
 
             const requestBody = {
-                contents: [{
-                    parts: [
-                        { text: prompt },
-                        {
-                            inline_data: {
-                                mime_type: 'image/jpeg',
-                                data: base64Image
+                model: GROQ_CONFIG.model,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'text',
+                                text: prompt
+                            },
+                            {
+                                type: 'image_url',
+                                image_url: {
+                                    url: imageDataUrl
+                                }
                             }
-                        }
-                    ]
-                }],
-                generationConfig: {
-                    temperature: 0.1,
-                    maxOutputTokens: 200
-                }
+                        ]
+                    }
+                ],
+                temperature: 0.1,
+                max_tokens: 200
             };
 
-            const response = await fetch(
-                `${GEMINI_CONFIG.apiUrl}/${GEMINI_CONFIG.model}:generateContent?key=${GEMINI_CONFIG.apiKey}`,
-                {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(requestBody)
-                }
-            );
+            const apiKey = GROQ_CONFIG.getApiKey();
+            if (!apiKey) {
+                this.speak('API Key não configurada. Por favor, recarregue a página e insira sua chave.', true);
+                this.resultsContainer.innerHTML = '<p class="error">API Key não configurada.</p>';
+                return;
+            }
+
+            const response = await fetch(GROQ_CONFIG.apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify(requestBody)
+            });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('Erro Gemini:', errorData);
+                console.error('Erro Groq:', errorData);
                 throw new Error(`Erro na API: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('Resposta Gemini:', data);
+            console.log('Resposta Groq:', data);
 
             // Extrair o texto da resposta
-            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const responseText = data.choices?.[0]?.message?.content;
             console.log('Texto da resposta:', responseText);
 
             if (!responseText) {
@@ -582,16 +593,16 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
             }
 
             // Parsear o JSON da resposta
-            this.processGeminiResponse(responseText);
+            this.processAIResponse(responseText);
 
         } catch (error) {
-            console.error('Erro ao analisar com Gemini:', error);
+            console.error('Erro ao analisar com Groq:', error);
             this.speak('Erro ao analisar imagem. Verifique sua conexão e tente novamente.', true);
             this.resultsContainer.innerHTML = `<p class="error">Erro: ${error.message}. Tente novamente.</p>`;
         }
     }
 
-    processGeminiResponse(responseText) {
+    processAIResponse(responseText) {
         try {
             // Limpar o texto - remover markdown se houver
             let cleanText = responseText.trim();
