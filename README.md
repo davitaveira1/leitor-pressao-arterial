@@ -1,5 +1,12 @@
 # Leitor de Pressão Arterial Acessível
 
+[![GitHub](https://img.shields.io/badge/GitHub-Repositório-blue?logo=github)](https://github.com/davitaveira1/leitor-pressao-arterial)
+[![GitHub Pages](https://img.shields.io/badge/Demo-GitHub%20Pages-green?logo=github)](https://davitaveira1.github.io/leitor-pressao-arterial)
+
+> 🔗 **Repositório**: https://github.com/davitaveira1/leitor-pressao-arterial
+> 
+> 🌐 **Demo Online**: https://davitaveira1.github.io/leitor-pressao-arterial
+
 Aplicativo web acessível para leitura de medidores de pressão arterial usando a câmera do celular. Desenvolvido especialmente para pessoas com deficiência visual.
 
 ## 🎯 Funcionalidades
