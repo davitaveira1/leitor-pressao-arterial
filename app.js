@@ -1,25 +1,20 @@
+﻿// VERSAO 2.4.0 - Codigo original restaurado
 /**
- * Leitor de Pressão Arterial Acessível
- * Aplicação para leitura de medidores de pressão usando câmera e OCR
+ * Leitor de Press├úo Arterial Acess├¡vel
+ * Aplica├º├úo para leitura de medidores de press├úo usando c├ómera e OCR
  * Desenvolvido com foco em acessibilidade para pessoas cegas
  */
-
-// ===== VERSÃO =====
-const APP_VERSION = '2.3.0';
-const APP_BUILD_DATE = '2025-12-18';
 
 // ===== Classe Principal =====
 class BloodPressureReader {
     constructor() {
-        this.version = APP_VERSION;
-        
         // Elementos DOM
         this.video = document.getElementById('camera-feed');
         this.captureCanvas = document.getElementById('capture-canvas');
         this.overlayCanvas = document.getElementById('overlay-canvas');
         this.guideBox = document.getElementById('guide-box');
         
-        // Botões
+        // Bot├Áes
         this.startCameraBtn = document.getElementById('start-camera-btn');
         this.captureBtn = document.getElementById('capture-btn');
         this.autoModeBtn = document.getElementById('auto-mode-btn');
@@ -36,7 +31,7 @@ class BloodPressureReader {
         this.healthAssessment = document.getElementById('health-assessment');
         this.healthMessage = document.getElementById('health-message');
         
-        // Estado da aplicação
+        // Estado da aplica├º├úo
         this.stream = null;
         this.isAutoMode = false;
         this.autoModeInterval = null;
@@ -48,64 +43,28 @@ class BloodPressureReader {
         this.speechSynthesis = window.speechSynthesis;
         this.speechQueue = [];
         this.isSpeaking = false;
-        this.captureAttempts = 0;
-        this.debugMode = true; // Ativar logs de debug
         
-        // Configurações otimizadas
+        // Configura├º├Áes
         this.config = {
-            autoModeDelay: 4000,
-            orientationCheckDelay: 2000,
-            minConfidence: 40, // Reduzido para ser menos restritivo
-            speechRate: 0.9,
+            autoModeDelay: 3000,
+            orientationCheckDelay: 1500,
+            minConfidence: 60,
+            speechRate: 1.0,
             speechPitch: 1.0,
             speechVolume: 1.0,
-            language: 'pt-BR',
-            // Configurações de detecção mais permissivas
-            brightnessThreshold: 150, // Reduzido de 180
-            minBrightPixels: 5, // Reduzido de 10
-            positionTolerance: 25, // Aumentado de 15
-            minDisplaySize: 10, // Reduzido de 20
-            maxDisplaySize: 80 // Aumentado de 60
+            language: 'pt-BR'
         };
         
         // Inicializar
         this.init();
     }
     
-    // ===== Inicialização =====
+    // ===== Inicializa├º├úo =====
     async init() {
-        // Exibir versão no console e na tela
-        console.log(`🩺 Leitor de Pressão Arterial v${APP_VERSION} (${APP_BUILD_DATE})`);
-        this.showVersion();
-        
         this.bindEvents();
         this.setupKeyboardShortcuts();
-        
         await this.initTesseract();
-        
-        // Falar após um pequeno delay para garantir que as vozes carregaram
-        setTimeout(() => {
-            this.speak('Aplicativo de leitura de pressão arterial carregado. Pressione o botão Iniciar Câmera para começar.');
-        }, 1000);
-    }
-    
-    showVersion() {
-        // Adicionar versão no footer
-        const footer = document.querySelector('footer p');
-        if (footer) {
-            footer.innerHTML += ` | <strong>Versão ${APP_VERSION}</strong>`;
-        }
-        
-        // Adicionar badge de versão
-        const header = document.querySelector('header');
-        if (header) {
-            const versionBadge = document.createElement('div');
-            versionBadge.id = 'version-badge';
-            versionBadge.style.cssText = 'background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; margin-top: 8px; display: inline-block;';
-            versionBadge.textContent = `v${APP_VERSION}`;
-            versionBadge.setAttribute('aria-label', `Versão ${APP_VERSION}`);
-            header.appendChild(versionBadge);
-        }
+        this.speak('Aplicativo de leitura de press├úo arterial carregado. Pressione o bot├úo Iniciar C├ómera para come├ºar.');
     }
     
     bindEvents() {
@@ -113,21 +72,11 @@ class BloodPressureReader {
         this.captureBtn.addEventListener('click', () => this.captureAndRead());
         this.autoModeBtn.addEventListener('click', () => this.toggleAutoMode());
         this.repeatBtn.addEventListener('click', () => this.repeatLastReading());
-        
-        // Botão de teste de voz (importante para móveis!)
-        const testVoiceBtn = document.getElementById('test-voice-btn');
-        if (testVoiceBtn) {
-            testVoiceBtn.addEventListener('click', () => this.testVoice());
-        }
-    }
-    
-    testVoice() {
-        console.log('[VOZ] Teste de voz acionado pelo usuário');
-        this.speak('Teste de voz. Se você está ouvindo esta mensagem, a voz está funcionando corretamente. Versão ' + APP_VERSION);
     }
     
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
+            // Ignorar se estiver em um campo de input
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
             
             switch(e.key.toLowerCase()) {
@@ -151,7 +100,7 @@ class BloodPressureReader {
         });
     }
     
-    // ===== Síntese de Voz (ORIGINAL v1.0 - FUNCIONAVA) =====
+    // ===== S├¡ntese de Voz =====
     speak(text, priority = false) {
         if (priority) {
             // Cancelar fala atual e limpar fila
@@ -174,7 +123,7 @@ class BloodPressureReader {
         utterance.pitch = this.config.speechPitch;
         utterance.volume = this.config.speechVolume;
         
-        // Tentar usar voz em português
+        // Tentar usar voz em portugu├¬s
         const voices = this.speechSynthesis.getVoices();
         const ptVoice = voices.find(v => v.lang.startsWith('pt'));
         if (ptVoice) utterance.voice = ptVoice;
@@ -196,20 +145,11 @@ class BloodPressureReader {
         this.speechSynthesis.speak(utterance);
     }
     
-    testVoice() {
-        console.log('[VOZ] Teste de voz acionado pelo usuário');
-        this.speak('Teste de voz. Se você está ouvindo esta mensagem, a voz está funcionando corretamente. Versão ' + APP_VERSION);
-    }
-    processNextSpeech() {
-        // Mantido para compatibilidade mas não usado
-    }
-    
-    // ===== Inicialização do Tesseract =====
+    // ===== Inicializa├º├úo do Tesseract =====
     async initTesseract() {
         try {
             this.updateStatus('Carregando sistema de leitura...', 'processing');
             
-            // Criar worker com configuração otimizada para displays de 7 segmentos
             this.tesseractWorker = await Tesseract.createWorker('eng', 1, {
                 logger: m => {
                     if (m.status === 'recognizing text') {
@@ -219,23 +159,22 @@ class BloodPressureReader {
                 }
             });
             
-            // Configurar para melhor reconhecimento de dígitos
+            // Configurar para reconhecer apenas d├¡gitos
             await this.tesseractWorker.setParameters({
                 tessedit_char_whitelist: '0123456789',
-                tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT, // Melhor para texto esparso
-                preserve_interword_spaces: '0'
+                tessedit_pageseg_mode: Tesseract.PSM.SINGLE_BLOCK
             });
             
-            this.updateStatus('Sistema pronto. Pressione Iniciar Câmera.', 'success');
+            this.updateStatus('Sistema pronto. Pressione Iniciar C├ómera.', 'success');
             
         } catch (error) {
             console.error('Erro ao inicializar Tesseract:', error);
             this.updateStatus('Erro ao carregar sistema de leitura', 'error');
-            this.speak('Erro ao carregar o sistema de leitura. Por favor, recarregue a página.');
+            this.speak('Erro ao carregar o sistema de leitura. Por favor, recarregue a p├ígina.');
         }
     }
     
-    // ===== Controle da Câmera =====
+    // ===== Controle da C├ómera =====
     async toggleCamera() {
         if (this.stream) {
             this.stopCamera();
@@ -246,14 +185,15 @@ class BloodPressureReader {
     
     async startCamera() {
         try {
-            this.updateStatus('Iniciando câmera...', 'processing');
-            this.speak('Iniciando câmera. Aguarde.');
+            this.updateStatus('Iniciando c├ómera...', 'processing');
+            this.speak('Iniciando c├ómera. Aguarde.');
             
+            // Configura├º├Áes da c├ómera - preferir c├ómera traseira
             const constraints = {
                 video: {
                     facingMode: { ideal: 'environment' },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
                 },
                 audio: false
             };
@@ -268,24 +208,27 @@ class BloodPressureReader {
                 };
             });
             
+            // Configurar canvas
             this.captureCanvas.width = this.video.videoWidth;
             this.captureCanvas.height = this.video.videoHeight;
             this.overlayCanvas.width = this.video.videoWidth;
             this.overlayCanvas.height = this.video.videoHeight;
             
-            this.startCameraBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">⏹️</span>Parar Câmera';
+            // Atualizar UI
+            this.startCameraBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">ÔÅ╣´©Å</span>Parar C├ómera';
             this.captureBtn.disabled = false;
             this.autoModeBtn.disabled = false;
             
-            this.updateStatus('Câmera ativa. Aponte para o medidor e pressione Ler Pressão.', 'success');
-            this.speak('Câmera iniciada. Aponte o celular para o display do medidor de pressão e pressione o botão Ler Pressão quando estiver pronto. O botão funciona mesmo que a posição não esteja perfeita.');
+            this.updateStatus('C├ómera ativa. Aponte para o medidor de press├úo.', 'success');
+            this.speak('C├ómera iniciada. Aponte o celular para o display do medidor de press├úo. Vou orientar voc├¬ sobre o posicionamento.');
             
+            // Iniciar verifica├º├úo de orienta├º├úo
             this.startOrientationCheck();
             
         } catch (error) {
-            console.error('Erro ao acessar câmera:', error);
-            this.updateStatus('Erro ao acessar câmera. Verifique as permissões.', 'error');
-            this.speak('Não foi possível acessar a câmera. Por favor, verifique se você concedeu permissão de acesso à câmera.');
+            console.error('Erro ao acessar c├ómera:', error);
+            this.updateStatus('Erro ao acessar c├ómera. Verifique as permiss├Áes.', 'error');
+            this.speak('N├úo foi poss├¡vel acessar a c├ómera. Por favor, verifique se voc├¬ concedeu permiss├úo de acesso ├á c├ómera.');
         }
     }
     
@@ -299,16 +242,17 @@ class BloodPressureReader {
         this.stopOrientationCheck();
         this.stopAutoMode();
         
-        this.startCameraBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">📷</span>Iniciar Câmera';
+        // Atualizar UI
+        this.startCameraBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">­ƒôÀ</span>Iniciar C├ómera';
         this.captureBtn.disabled = true;
         this.autoModeBtn.disabled = true;
         
-        this.updateStatus('Câmera desativada.', '');
-        this.updateOrientation('Câmera desativada');
-        this.speak('Câmera desativada.');
+        this.updateStatus('C├ómera desativada.', '');
+        this.updateOrientation('C├ómera desativada');
+        this.speak('C├ómera desativada.');
     }
     
-    // ===== Verificação de Orientação (mais permissiva) =====
+    // ===== Verifica├º├úo de Orienta├º├úo =====
     startOrientationCheck() {
         this.orientationCheckInterval = setInterval(() => {
             this.checkOrientation();
@@ -328,53 +272,44 @@ class BloodPressureReader {
         const ctx = this.captureCanvas.getContext('2d');
         ctx.drawImage(this.video, 0, 0);
         
+        // Analisar a imagem para determinar orienta├º├úo
         const imageData = ctx.getImageData(0, 0, this.captureCanvas.width, this.captureCanvas.height);
         const analysis = this.analyzeImageForOrientation(imageData);
         
         let orientationMessage = '';
         let isAligned = false;
         
-        // Análise mais permissiva
         if (analysis.hasDisplay) {
-            const absX = Math.abs(analysis.centerOffsetX);
-            const absY = Math.abs(analysis.centerOffsetY);
-            
-            if (absX <= this.config.positionTolerance && absY <= this.config.positionTolerance) {
-                if (analysis.size < this.config.minDisplaySize) {
-                    orientationMessage = 'Aproxime um pouco o celular';
-                } else if (analysis.size > this.config.maxDisplaySize) {
-                    orientationMessage = 'Afaste um pouco o celular';
-                } else {
-                    orientationMessage = 'Boa posição! Pressione Ler Pressão.';
-                    isAligned = true;
-                }
+            if (analysis.centerOffsetX > 15) {
+                orientationMessage = 'Mova para a direita';
+            } else if (analysis.centerOffsetX < -15) {
+                orientationMessage = 'Mova para a esquerda';
+            } else if (analysis.centerOffsetY > 15) {
+                orientationMessage = 'Mova para baixo';
+            } else if (analysis.centerOffsetY < -15) {
+                orientationMessage = 'Mova para cima';
+            } else if (analysis.size < 20) {
+                orientationMessage = 'Aproxime o celular';
+            } else if (analysis.size > 60) {
+                orientationMessage = 'Afaste o celular';
             } else {
-                // Dar dicas de direção apenas se muito desalinhado
-                if (analysis.centerOffsetX > this.config.positionTolerance) {
-                    orientationMessage = 'Mova para a direita';
-                } else if (analysis.centerOffsetX < -this.config.positionTolerance) {
-                    orientationMessage = 'Mova para a esquerda';
-                } else if (analysis.centerOffsetY > this.config.positionTolerance) {
-                    orientationMessage = 'Mova para baixo';
-                } else if (analysis.centerOffsetY < -this.config.positionTolerance) {
-                    orientationMessage = 'Mova para cima';
-                }
+                orientationMessage = 'Posi├º├úo correta! Pressione Ler Press├úo.';
+                isAligned = true;
             }
         } else {
-            orientationMessage = 'Procurando display... Aponte para o medidor.';
+            orientationMessage = 'Display n├úo detectado. Aponte para o medidor.';
         }
         
+        // Atualizar UI
         this.updateOrientation(orientationMessage, isAligned);
         
-        // Falar menos frequentemente para não irritar
-        if (orientationMessage !== this.lastOrientationSpoken && !this.isProcessing) {
+        // Falar orienta├º├úo apenas se mudou
+        if (orientationMessage !== this.lastOrientationSpoken) {
             this.lastOrientationSpoken = orientationMessage;
-            // Só falar se for uma mensagem importante
-            if (isAligned || orientationMessage.includes('Procurando')) {
-                this.speak(orientationMessage, true);
-            }
+            this.speak(orientationMessage, true);
         }
         
+        // Atualizar guide box
         if (isAligned) {
             this.guideBox.classList.add('aligned');
         } else {
@@ -387,27 +322,29 @@ class BloodPressureReader {
         const height = imageData.height;
         const data = imageData.data;
         
+        // Detectar ├íreas claras (display LCD geralmente ├® mais claro)
         let brightPixels = [];
         
-        // Análise com threshold mais baixo
-        for (let y = 0; y < height; y += 8) {
-            for (let x = 0; x < width; x += 8) {
+        for (let y = 0; y < height; y += 10) {
+            for (let x = 0; x < width; x += 10) {
                 const i = (y * width + x) * 4;
                 const r = data[i];
                 const g = data[i + 1];
                 const b = data[i + 2];
                 
+                // Detectar pixels claros (display)
                 const brightness = (r + g + b) / 3;
-                if (brightness > this.config.brightnessThreshold) {
-                    brightPixels.push({ x, y, brightness });
+                if (brightness > 180) {
+                    brightPixels.push({ x, y });
                 }
             }
         }
         
-        if (brightPixels.length < this.config.minBrightPixels) {
+        if (brightPixels.length < 10) {
             return { hasDisplay: false };
         }
         
+        // Calcular centro dos pixels claros
         let sumX = 0, sumY = 0;
         brightPixels.forEach(p => {
             sumX += p.x;
@@ -417,9 +354,11 @@ class BloodPressureReader {
         const centerX = sumX / brightPixels.length;
         const centerY = sumY / brightPixels.length;
         
+        // Calcular offset do centro da imagem (em porcentagem)
         const centerOffsetX = ((centerX / width) - 0.5) * 100;
         const centerOffsetY = ((centerY / height) - 0.5) * 100;
         
+        // Estimar tamanho do display
         const minX = Math.min(...brightPixels.map(p => p.x));
         const maxX = Math.max(...brightPixels.map(p => p.x));
         const size = ((maxX - minX) / width) * 100;
@@ -428,44 +367,60 @@ class BloodPressureReader {
             hasDisplay: true,
             centerOffsetX,
             centerOffsetY,
-            size,
-            brightPixelCount: brightPixels.length
+            size
         };
     }
     
-    // ===== Captura e Leitura (MELHORADA) =====
+    // ===== Captura e Leitura =====
     async captureAndRead() {
         if (this.isProcessing || !this.stream) return;
         
         this.isProcessing = true;
         this.captureBtn.disabled = true;
         this.captureBtn.classList.add('loading');
-        this.captureAttempts++;
         
         this.updateStatus('Capturando imagem...', 'processing');
-        this.speak('Processando. Mantenha o celular parado.', true);
+        this.speak('Capturando imagem. Aguarde.', true);
         
         try {
-            // Capturar múltiplos frames e usar o melhor
-            const results = await this.captureMultipleFrames(3);
+            // Capturar frame
+            const ctx = this.captureCanvas.getContext('2d');
+            ctx.drawImage(this.video, 0, 0);
             
-            if (results) {
-                this.displayResults(results);
-                this.lastReading = results;
+            // Pr├®-processar imagem para melhor OCR
+            this.preprocessImage(ctx);
+            
+            // Converter para blob
+            const blob = await new Promise(resolve => {
+                this.captureCanvas.toBlob(resolve, 'image/png');
+            });
+            
+            // Executar OCR
+            this.updateStatus('Processando leitura...', 'processing');
+            
+            const result = await this.tesseractWorker.recognize(blob);
+            
+            // Extrair valores
+            const values = this.extractBloodPressureValues(result.data.text);
+            
+            if (values) {
+                this.displayResults(values);
+                this.lastReading = values;
                 this.repeatBtn.disabled = false;
                 
-                const assessment = this.assessBloodPressure(results.systolic, results.diastolic);
-                this.speakResults(results, assessment);
+                const assessment = this.assessBloodPressure(values.systolic, values.diastolic);
+                this.speakResults(values, assessment);
                 
-                this.updateStatus('Leitura concluída com sucesso!', 'success');
+                this.updateStatus('Leitura conclu├¡da com sucesso!', 'success');
             } else {
-                this.handleFailedReading();
+                this.updateStatus('N├úo foi poss├¡vel ler os valores. Tente novamente.', 'error');
+                this.speak('N├úo foi poss├¡vel ler os valores do display. Por favor, ajuste a posi├º├úo do celular e tente novamente.');
             }
             
         } catch (error) {
             console.error('Erro na leitura:', error);
             this.updateStatus('Erro ao processar imagem.', 'error');
-            this.speak('Ocorreu um erro. Tente novamente.');
+            this.speak('Ocorreu um erro ao processar a imagem. Por favor, tente novamente.');
         } finally {
             this.isProcessing = false;
             this.captureBtn.disabled = false;
@@ -473,337 +428,113 @@ class BloodPressureReader {
         }
     }
     
-    async captureMultipleFrames(count) {
-        const allValues = [];
-        
-        for (let i = 0; i < count; i++) {
-            // Pequeno delay entre capturas
-            if (i > 0) await this.delay(200);
-            
-            const ctx = this.captureCanvas.getContext('2d');
-            ctx.drawImage(this.video, 0, 0);
-            
-            // Tentar múltiplos métodos de pré-processamento
-            const methods = [
-                () => this.preprocessImageV2(ctx, 'contrast'),
-                () => this.preprocessImageV2(ctx, 'threshold'),
-                () => this.preprocessImageV2(ctx, 'adaptive')
-            ];
-            
-            for (const method of methods) {
-                // Restaurar imagem original
-                ctx.drawImage(this.video, 0, 0);
-                method();
-                
-                const blob = await new Promise(resolve => {
-                    this.captureCanvas.toBlob(resolve, 'image/png');
-                });
-                
-                try {
-                    const result = await this.tesseractWorker.recognize(blob);
-                    
-                    if (this.debugMode) {
-                        console.log(`Tentativa ${i+1}, Texto OCR:`, result.data.text);
-                    }
-                    
-                    const values = this.extractBloodPressureValues(result.data.text);
-                    if (values) {
-                        allValues.push(values);
-                    }
-                } catch (e) {
-                    console.error('Erro OCR:', e);
-                }
-            }
-        }
-        
-        // Retornar o resultado mais frequente ou o primeiro válido
-        if (allValues.length > 0) {
-            return this.getMostCommonReading(allValues);
-        }
-        
-        return null;
-    }
-    
-    getMostCommonReading(readings) {
-        if (readings.length === 1) return readings[0];
-        
-        // Agrupar por valores similares
-        const groups = [];
-        for (const reading of readings) {
-            let found = false;
-            for (const group of groups) {
-                if (Math.abs(group[0].systolic - reading.systolic) <= 5 &&
-                    Math.abs(group[0].diastolic - reading.diastolic) <= 5) {
-                    group.push(reading);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                groups.push([reading]);
-            }
-        }
-        
-        // Retornar o grupo mais frequente
-        groups.sort((a, b) => b.length - a.length);
-        
-        // Calcular média do grupo mais frequente
-        const bestGroup = groups[0];
-        const avgSystolic = Math.round(bestGroup.reduce((s, r) => s + r.systolic, 0) / bestGroup.length);
-        const avgDiastolic = Math.round(bestGroup.reduce((s, r) => s + r.diastolic, 0) / bestGroup.length);
-        const avgPulse = bestGroup[0].pulse ? 
-            Math.round(bestGroup.filter(r => r.pulse).reduce((s, r) => s + r.pulse, 0) / bestGroup.filter(r => r.pulse).length) : 
-            null;
-        
-        return { systolic: avgSystolic, diastolic: avgDiastolic, pulse: avgPulse };
-    }
-    
-    handleFailedReading() {
-        let message = '';
-        
-        if (this.captureAttempts <= 2) {
-            message = 'Não consegui ler os valores. Tente aproximar mais o celular do display e mantenha-o bem iluminado.';
-        } else if (this.captureAttempts <= 4) {
-            message = 'Ainda não consegui ler. Tente inclinar um pouco o celular para evitar reflexos no display.';
-        } else {
-            message = 'Dificuldade na leitura. Certifique-se que o display está ligado e mostrando os números claramente.';
-            this.captureAttempts = 0; // Reset
-        }
-        
-        this.updateStatus('Não foi possível ler. Tente novamente.', 'error');
-        this.speak(message);
-    }
-    
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-    
-    // ===== Pré-processamento de Imagem V2 (MELHORADO) =====
-    preprocessImageV2(ctx, method = 'adaptive') {
-        const canvas = this.captureCanvas;
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    preprocessImage(ctx) {
+        const imageData = ctx.getImageData(0, 0, this.captureCanvas.width, this.captureCanvas.height);
         const data = imageData.data;
         
-        switch(method) {
-            case 'contrast':
-                this.applyContrastEnhancement(data);
-                break;
-            case 'threshold':
-                this.applySimpleThreshold(data, 140);
-                break;
-            case 'adaptive':
-                this.applyAdaptiveThreshold(data, canvas.width, canvas.height);
-                break;
+        // Aumentar contraste e converter para escala de cinza
+        for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            
+            // Binariza├º├úo com limiar adaptativo
+            const threshold = 128;
+            const newValue = avg > threshold ? 255 : 0;
+            
+            // Inverter (texto escuro em fundo claro para melhor OCR)
+            const finalValue = 255 - newValue;
+            
+            data[i] = finalValue;
+            data[i + 1] = finalValue;
+            data[i + 2] = finalValue;
         }
         
         ctx.putImageData(imageData, 0, 0);
     }
     
-    applyContrastEnhancement(data) {
-        const factor = 2.0; // Fator de contraste
-        
-        for (let i = 0; i < data.length; i += 4) {
-            let r = data[i];
-            let g = data[i + 1];
-            let b = data[i + 2];
-            
-            // Converter para escala de cinza
-            let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-            
-            // Aumentar contraste
-            gray = ((gray - 128) * factor) + 128;
-            gray = Math.max(0, Math.min(255, gray));
-            
-            // Binarizar
-            const final = gray > 128 ? 255 : 0;
-            
-            data[i] = final;
-            data[i + 1] = final;
-            data[i + 2] = final;
-        }
-    }
-    
-    applySimpleThreshold(data, threshold) {
-        for (let i = 0; i < data.length; i += 4) {
-            const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-            const final = gray > threshold ? 255 : 0;
-            
-            data[i] = final;
-            data[i + 1] = final;
-            data[i + 2] = final;
-        }
-    }
-    
-    applyAdaptiveThreshold(data, width, height) {
-        const blockSize = 15;
-        const C = 10;
-        
-        // Converter para escala de cinza primeiro
-        const gray = new Uint8Array(width * height);
-        for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-            gray[j] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        }
-        
-        // Aplicar threshold adaptativo simplificado
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                const idx = y * width + x;
-                
-                // Calcular média local
-                let sum = 0, count = 0;
-                for (let dy = -blockSize; dy <= blockSize; dy++) {
-                    for (let dx = -blockSize; dx <= blockSize; dx++) {
-                        const nx = x + dx;
-                        const ny = y + dy;
-                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                            sum += gray[ny * width + nx];
-                            count++;
-                        }
-                    }
-                }
-                
-                const mean = sum / count;
-                const final = gray[idx] > (mean - C) ? 255 : 0;
-                
-                const i = idx * 4;
-                data[i] = final;
-                data[i + 1] = final;
-                data[i + 2] = final;
-            }
-        }
-    }
-    
-    // ===== Extração de Valores (MELHORADA) =====
     extractBloodPressureValues(text) {
-        if (this.debugMode) {
-            console.log('Texto OCR bruto:', text);
-        }
+        console.log('Texto OCR:', text);
         
-        // Limpar texto - remover caracteres estranhos
-        let cleanText = text.replace(/[^0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        // Limpar texto
+        const cleanText = text.replace(/\s+/g, ' ').trim();
         
-        if (this.debugMode) {
-            console.log('Texto limpo:', cleanText);
-        }
+        // Encontrar todos os n├║meros de 2-3 d├¡gitos
+        const numbers = cleanText.match(/\d{2,3}/g);
         
-        // Encontrar todos os números
-        const allNumbers = cleanText.match(/\d+/g);
-        
-        if (!allNumbers) {
+        if (!numbers || numbers.length < 2) {
             return null;
         }
         
-        // Filtrar números válidos (2-3 dígitos para pressão, 2-3 para pulso)
-        let numbers = allNumbers
-            .map(n => parseInt(n, 10))
-            .filter(n => n >= 30 && n <= 250);
+        // Converter para n├║meros
+        const numericValues = numbers.map(n => parseInt(n, 10));
         
-        if (this.debugMode) {
-            console.log('Números encontrados:', numbers);
-        }
+        // Filtrar valores v├ílidos
+        const validValues = numericValues.filter(n => n >= 30 && n <= 250);
         
-        if (numbers.length < 2) {
-            // Tentar extrair de números maiores (ex: "12080" -> 120, 80)
-            for (const numStr of allNumbers) {
-                if (numStr.length >= 5) {
-                    // Pode ser dois números juntos
-                    const possibleSystolic = parseInt(numStr.substring(0, 3), 10);
-                    const possibleDiastolic = parseInt(numStr.substring(3), 10);
-                    
-                    if (possibleSystolic >= 70 && possibleSystolic <= 200 &&
-                        possibleDiastolic >= 40 && possibleDiastolic <= 130) {
-                        numbers = [possibleSystolic, possibleDiastolic];
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if (numbers.length < 2) {
+        if (validValues.length < 2) {
             return null;
         }
         
-        // Ordenar do maior para menor
-        numbers.sort((a, b) => b - a);
+        // Ordenar para encontrar sist├│lica, diast├│lica e pulso
+        // Sist├│lica ├® geralmente o maior valor (exceto se houver pulso alto)
+        // Diast├│lica ├® menor que sist├│lica
+        // Pulso geralmente est├í entre 40-200
         
-        // Identificar valores
-        let systolic = null, diastolic = null, pulse = null;
+        let systolic, diastolic, pulse = null;
         
-        // Estratégia: valores típicos
-        // Sistólica: 90-180 (mais comum 110-140)
-        // Diastólica: 60-100 (mais comum 70-90)
-        // Pulso: 50-120 (mais comum 60-100)
+        // Estrat├®gia: assumir que os dois maiores valores s├úo press├úo
+        // e o terceiro (se existir e for razo├ível) ├® o pulso
+        const sorted = [...validValues].sort((a, b) => b - a);
         
-        const systolicCandidates = numbers.filter(n => n >= 90 && n <= 200);
-        const diastolicCandidates = numbers.filter(n => n >= 50 && n <= 110);
+        // Primeiro, tentar identificar pela faixa t├¡pica
+        const highValues = sorted.filter(v => v >= 60 && v <= 200);
+        const pulseCandidate = sorted.find(v => v >= 40 && v <= 150);
         
-        if (systolicCandidates.length > 0 && diastolicCandidates.length > 0) {
-            systolic = systolicCandidates[0]; // Maior valor na faixa
+        if (highValues.length >= 2) {
+            systolic = highValues[0];
+            diastolic = highValues[1];
             
-            // Diastólica deve ser menor que sistólica
-            diastolic = diastolicCandidates.find(d => d < systolic);
-            
-            if (!diastolic && diastolicCandidates.length > 0) {
-                diastolic = diastolicCandidates[diastolicCandidates.length - 1];
+            // Se h├í um terceiro valor que parece ser pulso
+            if (sorted.length >= 3) {
+                const remaining = sorted.find(v => v !== systolic && v !== diastolic && v >= 40 && v <= 150);
+                if (remaining) pulse = remaining;
             }
+        } else if (sorted.length >= 2) {
+            systolic = sorted[0];
+            diastolic = sorted[1];
+        } else {
+            return null;
         }
         
-        // Fallback: usar os dois maiores valores
-        if (!systolic || !diastolic) {
-            systolic = numbers[0];
-            diastolic = numbers.length > 1 ? numbers[1] : null;
-        }
-        
-        // Garantir que sistólica > diastólica
-        if (systolic && diastolic && systolic < diastolic) {
+        // Validar: sist├│lica deve ser maior que diast├│lica
+        if (systolic <= diastolic) {
             [systolic, diastolic] = [diastolic, systolic];
         }
         
-        // Verificar se há um terceiro valor (pulso)
-        if (numbers.length >= 3) {
-            const pulseCandidates = numbers.filter(n => 
-                n !== systolic && n !== diastolic && n >= 40 && n <= 150
-            );
-            if (pulseCandidates.length > 0) {
-                pulse = pulseCandidates[0];
-            }
-        }
-        
-        // Validação final
-        if (!systolic || !diastolic) {
+        // Valida├º├úo b├ísica
+        if (systolic < 70 || systolic > 250 || diastolic < 40 || diastolic > 150) {
             return null;
-        }
-        
-        if (systolic < 70 || systolic > 220 || diastolic < 40 || diastolic > 140) {
-            return null;
-        }
-        
-        // A diferença deve ser razoável
-        if (systolic - diastolic < 20 || systolic - diastolic > 100) {
-            return null;
-        }
-        
-        if (this.debugMode) {
-            console.log('Valores extraídos:', { systolic, diastolic, pulse });
         }
         
         return { systolic, diastolic, pulse };
     }
     
-    // ===== Exibição de Resultados =====
+    // ===== Exibi├º├úo de Resultados =====
     displayResults(values) {
         const assessment = this.assessBloodPressure(values.systolic, values.diastolic);
         
+        // Atualizar valores
         this.systolicValue.textContent = values.systolic;
         this.diastolicValue.textContent = values.diastolic;
         this.pulseValue.textContent = values.pulse || '---';
         
+        // Aplicar classes de cor
         const systolicCard = this.systolicValue.closest('.result-card');
         const diastolicCard = this.diastolicValue.closest('.result-card');
         
         systolicCard.className = 'result-card ' + assessment.systolicClass;
         diastolicCard.className = 'result-card ' + assessment.diastolicClass;
         
+        // Atualizar avalia├º├úo
         this.healthAssessment.className = 'health-box ' + assessment.overallClass;
         this.healthMessage.textContent = assessment.message;
     }
@@ -811,46 +542,55 @@ class BloodPressureReader {
     assessBloodPressure(systolic, diastolic) {
         let systolicClass, diastolicClass, overallClass, message;
         
-        if (systolic < 120) systolicClass = 'normal';
-        else if (systolic < 130) systolicClass = 'elevated';
-        else systolicClass = 'high';
-        
-        if (diastolic < 80) diastolicClass = 'normal';
-        else if (diastolic < 90) diastolicClass = 'elevated';
-        else diastolicClass = 'high';
-        
-        if (systolic < 120 && diastolic < 80) {
-            overallClass = 'normal';
-            message = 'Pressão arterial normal';
-        } else if (systolic >= 120 && systolic < 130 && diastolic < 80) {
-            overallClass = 'elevated';
-            message = 'Pressão arterial elevada';
-        } else if ((systolic >= 130 && systolic < 140) || (diastolic >= 80 && diastolic < 90)) {
-            overallClass = 'elevated';
-            message = 'Hipertensão estágio 1 - Consulte um médico';
-        } else if (systolic >= 140 || diastolic >= 90) {
-            overallClass = 'high';
-            message = 'Hipertensão estágio 2 - Procure atendimento médico';
+        // Classifica├º├úo da sist├│lica
+        if (systolic < 120) {
+            systolicClass = 'normal';
+        } else if (systolic < 130) {
+            systolicClass = 'elevated';
+        } else {
+            systolicClass = 'high';
         }
         
-        if (systolic > 180 || diastolic > 120) {
+        // Classifica├º├úo da diast├│lica
+        if (diastolic < 80) {
+            diastolicClass = 'normal';
+        } else if (diastolic < 90) {
+            diastolicClass = 'elevated';
+        } else {
+            diastolicClass = 'high';
+        }
+        
+        // Avalia├º├úo geral (baseada nas diretrizes de press├úo arterial)
+        if (systolic < 120 && diastolic < 80) {
+            overallClass = 'normal';
+            message = 'Press├úo arterial normal';
+        } else if (systolic >= 120 && systolic < 130 && diastolic < 80) {
+            overallClass = 'elevated';
+            message = 'Press├úo arterial elevada';
+        } else if ((systolic >= 130 && systolic < 140) || (diastolic >= 80 && diastolic < 90)) {
+            overallClass = 'elevated';
+            message = 'Hipertens├úo est├ígio 1 - Consulte um m├®dico';
+        } else if (systolic >= 140 || diastolic >= 90) {
             overallClass = 'high';
-            message = 'CRISE HIPERTENSIVA - Procure atendimento de emergência!';
+            message = 'Hipertens├úo est├ígio 2 - Procure atendimento m├®dico';
+        } else if (systolic > 180 || diastolic > 120) {
+            overallClass = 'high';
+            message = 'CRISE HIPERTENSIVA - Procure atendimento de emerg├¬ncia!';
         }
         
         return { systolicClass, diastolicClass, overallClass, message };
     }
     
     speakResults(values, assessment) {
-        let speech = `Leitura concluída. `;
-        speech += `Pressão máxima: ${values.systolic}. `;
-        speech += `Pressão mínima: ${values.diastolic}. `;
+        let speech = `Leitura conclu├¡da. `;
+        speech += `Press├úo sist├│lica, ou m├íxima: ${values.systolic} mil├¡metros de merc├║rio. `;
+        speech += `Press├úo diast├│lica, ou m├¡nima: ${values.diastolic} mil├¡metros de merc├║rio. `;
         
         if (values.pulse) {
             speech += `Pulso: ${values.pulse} batimentos por minuto. `;
         }
         
-        speech += `Avaliação: ${assessment.message}`;
+        speech += `Avalia├º├úo: ${assessment.message}`;
         
         this.speak(speech);
     }
@@ -862,7 +602,7 @@ class BloodPressureReader {
         }
     }
     
-    // ===== Modo Automático =====
+    // ===== Modo Autom├ítico =====
     toggleAutoMode() {
         if (this.isAutoMode) {
             this.stopAutoMode();
@@ -874,12 +614,12 @@ class BloodPressureReader {
     startAutoMode() {
         this.isAutoMode = true;
         this.autoModeBtn.setAttribute('aria-pressed', 'true');
-        this.autoModeBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">⏹️</span>Parar Automático';
+        this.autoModeBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">ÔÅ╣´©Å</span>Parar Autom├ítico';
         
-        this.speak('Modo automático ativado.');
+        this.speak('Modo autom├ítico ativado. O aplicativo tentar├í ler automaticamente quando o display estiver bem posicionado.');
         
         this.autoModeInterval = setInterval(() => {
-            if (!this.isProcessing) {
+            if (!this.isProcessing && this.guideBox.classList.contains('aligned')) {
                 this.captureAndRead();
             }
         }, this.config.autoModeDelay);
@@ -888,17 +628,17 @@ class BloodPressureReader {
     stopAutoMode() {
         this.isAutoMode = false;
         this.autoModeBtn.setAttribute('aria-pressed', 'false');
-        this.autoModeBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">🔄</span>Modo Automático';
+        this.autoModeBtn.innerHTML = '<span class="btn-icon" aria-hidden="true">­ƒöä</span>Modo Autom├ítico';
         
         if (this.autoModeInterval) {
             clearInterval(this.autoModeInterval);
             this.autoModeInterval = null;
         }
         
-        this.speak('Modo automático desativado.');
+        this.speak('Modo autom├ítico desativado.');
     }
     
-    // ===== Atualização de UI =====
+    // ===== Atualiza├º├úo de UI =====
     updateStatus(message, type = '') {
         this.statusMessage.textContent = message;
         this.statusMessage.className = 'status-box ' + type;
@@ -910,21 +650,22 @@ class BloodPressureReader {
     }
 }
 
-// ===== Inicialização =====
+// ===== Inicializa├º├úo =====
 document.addEventListener('DOMContentLoaded', () => {
+    // Verificar suporte a recursos necess├írios
     const checkSupport = () => {
         const issues = [];
         
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            issues.push('Acesso à câmera não suportado');
+            issues.push('Acesso ├á c├ómera n├úo suportado');
         }
         
         if (!window.speechSynthesis) {
-            issues.push('Síntese de voz não suportada');
+            issues.push('S├¡ntese de voz n├úo suportada');
         }
         
         if (!window.Tesseract) {
-            issues.push('Biblioteca de OCR não carregada');
+            issues.push('Biblioteca de OCR n├úo carregada');
         }
         
         return issues;
@@ -936,19 +677,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusMessage = document.getElementById('status-message');
         statusMessage.textContent = 'Erros: ' + issues.join(', ');
         statusMessage.className = 'status-box error';
+        
+        // Ainda assim tentar inicializar para dar feedback de voz se poss├¡vel
     }
     
+    // Carregar vozes
     if (window.speechSynthesis) {
         speechSynthesis.getVoices();
         speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
     }
     
+    // Iniciar aplica├º├úo
     window.bloodPressureReader = new BloodPressureReader();
 });
 
-// ===== Service Worker =====
+// ===== Service Worker para PWA (opcional) =====
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('sw.js').catch(() => {
+            // Service worker n├úo ├® cr├¡tico
+        });
     });
 }
+
