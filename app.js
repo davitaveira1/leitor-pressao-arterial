@@ -1,4 +1,4 @@
-// VERSAO 3.1.0 - ResponsiveVoice pre-carregado
+// VERSAO 3.2.0 - Audio API com Google Translate TTS
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -34,7 +34,7 @@ class BloodPressureReader {
         this.selectedVoice = null;
         this.voiceEnabled = false;
         this.voicesLoaded = false;
-        this.useResponsiveVoice = false; // Fallback flag
+        this.useAudioTTS = false; // Flag para usar Google TTS via Audio
         
         this.init();
     }
@@ -117,21 +117,86 @@ class BloodPressureReader {
         this.voiceEnabled = true;
         this.hideVoiceModal();
         
-        // Em mobile, usar ResponsiveVoice diretamente (mais confiável)
+        // Em mobile, usar Audio API com Google TTS
         if (this.isMobileDevice()) {
-            console.log('Dispositivo móvel detectado - usando ResponsiveVoice');
-            this.useResponsiveVoice = true;
-            this.speakWithResponsiveVoice('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+            console.log('Dispositivo móvel detectado - usando Google TTS via Audio');
+            this.useAudioTTS = true;
+            this.speakWithAudio('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
         } else {
-            // Desktop - tentar Web Speech API
+            // Desktop - usar Web Speech API
             const voices = this.speechSynthesis.getVoices();
             console.log('Vozes disponíveis:', voices.map(v => `${v.name} (${v.lang})`));
-            this.trySpeechSynthesis('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+            this.speakWithWebSpeech('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
         }
     }
 
-    // Tenta Web Speech API, se falhar usa ResponsiveVoice
-    trySpeechSynthesis(text) {
+    // Fala usando Audio API com Google Translate TTS (funciona em qualquer dispositivo)
+    speakWithAudio(text) {
+        console.log('speakWithAudio chamado com:', text);
+        
+        // Limitar texto a 200 caracteres (limite do Google TTS)
+        const chunks = this.splitText(text, 200);
+        this.playAudioChunks(chunks, 0);
+    }
+
+    // Divide texto em chunks menores
+    splitText(text, maxLength) {
+        const chunks = [];
+        let remaining = text;
+        
+        while (remaining.length > 0) {
+            if (remaining.length <= maxLength) {
+                chunks.push(remaining);
+                break;
+            }
+            
+            // Encontrar último espaço antes do limite
+            let splitIndex = remaining.lastIndexOf(' ', maxLength);
+            if (splitIndex === -1) splitIndex = maxLength;
+            
+            chunks.push(remaining.substring(0, splitIndex));
+            remaining = remaining.substring(splitIndex + 1);
+        }
+        
+        return chunks;
+    }
+
+    // Toca chunks de áudio sequencialmente
+    playAudioChunks(chunks, index) {
+        if (index >= chunks.length) {
+            this.isSpeaking = false;
+            console.log('Áudio terminado');
+            return;
+        }
+        
+        const text = encodeURIComponent(chunks[index]);
+        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${text}`;
+        
+        console.log('Tocando chunk', index + 1, 'de', chunks.length);
+        
+        const audio = new Audio(audioUrl);
+        audio.volume = 1;
+        
+        this.isSpeaking = true;
+        
+        audio.onended = () => {
+            this.playAudioChunks(chunks, index + 1);
+        };
+        
+        audio.onerror = (e) => {
+            console.log('Erro no áudio:', e);
+            // Tentar próximo chunk mesmo com erro
+            this.playAudioChunks(chunks, index + 1);
+        };
+        
+        audio.play().catch(e => {
+            console.log('Erro ao tocar áudio:', e);
+            alert('Não foi possível reproduzir áudio. Toque na tela e tente novamente.');
+        });
+    }
+
+    // Web Speech API para desktop
+    speakWithWebSpeech(text) {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'pt-BR';
         utterance.rate = 0.9;
@@ -140,100 +205,30 @@ class BloodPressureReader {
             utterance.voice = this.selectedVoice;
         }
         
-        let speechStarted = false;
-        
         utterance.onstart = () => {
-            speechStarted = true;
-            console.log('Web Speech API funcionou!');
+            this.isSpeaking = true;
+            console.log('Web Speech iniciou');
+        };
+        
+        utterance.onend = () => {
+            this.isSpeaking = false;
+            console.log('Web Speech terminou');
         };
         
         utterance.onerror = (e) => {
-            console.log('Web Speech API falhou:', e.error);
-            if (!speechStarted) {
-                console.log('Ativando ResponsiveVoice como fallback...');
-                this.useResponsiveVoice = true;
-                this.speakWithResponsiveVoice(text);
-            }
+            console.log('Web Speech erro:', e.error);
+            this.isSpeaking = false;
         };
         
         this.speechSynthesis.speak(utterance);
-        
-        // Timeout de segurança - se não começar em 2s, usar fallback
-        setTimeout(() => {
-            if (!speechStarted && !this.useResponsiveVoice) {
-                console.log('Timeout - ativando ResponsiveVoice');
-                this.speechSynthesis.cancel();
-                this.useResponsiveVoice = true;
-                this.speakWithResponsiveVoice(text);
-            }
-        }, 2000);
     }
 
-    // Fallback usando ResponsiveVoice (API externa gratuita)
-    speakWithResponsiveVoice(text) {
-        console.log('speakWithResponsiveVoice chamado com:', text);
-        console.log('responsiveVoice disponível:', typeof responsiveVoice !== 'undefined');
-        
-        if (typeof responsiveVoice !== 'undefined' && responsiveVoice.voiceSupport()) {
-            console.log('ResponsiveVoice suportado, tentando falar...');
-            
-            // Verificar vozes disponíveis
-            const rvVoices = responsiveVoice.getVoices();
-            console.log('Vozes ResponsiveVoice:', rvVoices);
-            
-            responsiveVoice.speak(text, "Brazilian Portuguese Female", {
-                pitch: 1,
-                rate: 0.9,
-                volume: 1,
-                onstart: () => {
-                    console.log('ResponsiveVoice iniciou!');
-                    this.isSpeaking = true;
-                },
-                onend: () => {
-                    console.log('ResponsiveVoice terminou');
-                    this.isSpeaking = false;
-                },
-                onerror: (e) => {
-                    console.log('ResponsiveVoice erro:', e);
-                    this.isSpeaking = false;
-                    // Tentar com outra voz
-                    this.tryAlternativeVoice(text);
-                }
-            });
-        } else {
-            console.log('ResponsiveVoice não disponível ou não suportado');
-            alert('Sistema de voz não disponível. Verifique sua conexão com a internet.');
-        }
-    }
-
-    // Tenta vozes alternativas do ResponsiveVoice
-    tryAlternativeVoice(text) {
-        const alternativeVoices = [
-            "Portuguese Female",
-            "Spanish Latin American Female", 
-            "US English Female"
-        ];
-        
-        for (const voice of alternativeVoices) {
-            try {
-                console.log('Tentando voz alternativa:', voice);
-                responsiveVoice.speak(text, voice, {
-                    onstart: () => console.log('Voz alternativa funcionou:', voice),
-                    onerror: () => console.log('Voz alternativa falhou:', voice)
-                });
-                break;
-            } catch (e) {
-                console.log('Erro com voz:', voice, e);
-            }
-        }
-    }
-
-    // Método principal de fala - escolhe automaticamente o melhor método
+    // Método principal de fala
     speakDirect(text) {
-        if (this.useResponsiveVoice) {
-            this.speakWithResponsiveVoice(text);
+        if (this.useAudioTTS) {
+            this.speakWithAudio(text);
         } else {
-            this.trySpeechSynthesis(text);
+            this.speakWithWebSpeech(text);
         }
     }
 
@@ -246,12 +241,9 @@ class BloodPressureReader {
         if (!this.voiceEnabled) return;
         
         if (priority) {
-            if (this.useResponsiveVoice && typeof responsiveVoice !== 'undefined') {
-                responsiveVoice.cancel();
-            } else {
-                this.speechSynthesis.cancel();
-            }
+            this.speechSynthesis.cancel();
             this.speechQueue = [];
+            this.isSpeaking = false;
         }
         
         this.speechQueue.push(text);
@@ -263,23 +255,14 @@ class BloodPressureReader {
         
         const text = this.speechQueue.shift();
         
-        // Usar ResponsiveVoice se Web Speech API falhou
-        if (this.useResponsiveVoice && typeof responsiveVoice !== 'undefined') {
-            this.isSpeaking = true;
-            responsiveVoice.speak(text, "Brazilian Portuguese Female", {
-                rate: 0.9,
-                onend: () => {
-                    this.isSpeaking = false;
-                    this.processNextSpeech();
-                },
-                onerror: () => {
-                    this.isSpeaking = false;
-                    this.processNextSpeech();
-                }
-            });
+        // Usar Audio TTS em mobile
+        if (this.useAudioTTS) {
+            const chunks = this.splitText(text, 200);
+            this.playAudioChunksQueued(chunks, 0);
             return;
         }
         
+        // Desktop - Web Speech API
         const utterance = new SpeechSynthesisUtterance(text);
         
         if (this.selectedVoice) {
@@ -303,29 +286,37 @@ class BloodPressureReader {
         utterance.onerror = (event) => {
             console.log('Erro na fala:', event.error);
             this.isSpeaking = false;
-            // Se Web Speech falhar, mudar para ResponsiveVoice
-            if (!this.useResponsiveVoice) {
-                this.useResponsiveVoice = true;
-                this.speechQueue.unshift(text); // Recolocar na fila
-                this.speakWithResponsiveVoice(text);
-            } else {
-                this.processNextSpeech();
-            }
+            this.processNextSpeech();
         };
         
-        // Workaround para Chrome mobile
-        if (this.speechSynthesis.paused) {
-            this.speechSynthesis.resume();
+        this.speechSynthesis.speak(utterance);
+    }
+
+    // Toca chunks com callback para fila
+    playAudioChunksQueued(chunks, index) {
+        if (index >= chunks.length) {
+            this.isSpeaking = false;
+            this.processNextSpeech();
+            return;
         }
         
-        this.speechSynthesis.speak(utterance);
+        const text = encodeURIComponent(chunks[index]);
+        const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=pt-BR&client=tw-ob&q=${text}`;
         
-        // Workaround adicional para Android
-        setTimeout(() => {
-            if (this.speechSynthesis.paused) {
-                this.speechSynthesis.resume();
-            }
-        }, 50);
+        const audio = new Audio(audioUrl);
+        this.isSpeaking = true;
+        
+        audio.onended = () => {
+            this.playAudioChunksQueued(chunks, index + 1);
+        };
+        
+        audio.onerror = () => {
+            this.playAudioChunksQueued(chunks, index + 1);
+        };
+        
+        audio.play().catch(() => {
+            this.playAudioChunksQueued(chunks, index + 1);
+        });
     }
 
     setupEventListeners() {
