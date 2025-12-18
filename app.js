@@ -1,4 +1,4 @@
-// VERSAO 2.7.0 - Correcao robusta de voz para dispositivos moveis
+// VERSAO 2.8.0 - Workaround agressivo para Chrome Android
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -116,17 +116,25 @@ class BloodPressureReader {
         this.voiceEnabled = true;
         this.hideVoiceModal();
         
-        // Forçar cancelamento de qualquer fala pendente
+        // Forçar cancelamento e reset completo
         this.speechSynthesis.cancel();
         
-        // Pequeno delay para garantir que o cancel foi processado
+        // Técnica que funciona no Chrome Android: criar utterance vazia primeiro
+        const warmup = new SpeechSynthesisUtterance('');
+        this.speechSynthesis.speak(warmup);
+        this.speechSynthesis.cancel();
+        
+        // Agora falar de verdade após o "warmup"
         setTimeout(() => {
             this.speakDirect('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
-        }, 100);
+        }, 250);
     }
 
     // Fala direta sem usar a fila - para garantir funcionamento no mobile
     speakDirect(text) {
+        // Cancelar qualquer coisa pendente
+        this.speechSynthesis.cancel();
+        
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'pt-BR';
         utterance.rate = 0.9;
@@ -137,19 +145,29 @@ class BloodPressureReader {
             utterance.voice = this.selectedVoice;
         }
         
-        // Workaround para Chrome mobile - precisa de resume
-        if (this.speechSynthesis.paused) {
-            this.speechSynthesis.resume();
-        }
+        // Log para debug
+        console.log('Tentando falar:', text);
+        console.log('Estado speechSynthesis - paused:', this.speechSynthesis.paused, 'speaking:', this.speechSynthesis.speaking);
         
+        utterance.onstart = () => console.log('Fala iniciada');
+        utterance.onend = () => console.log('Fala terminada');
+        utterance.onerror = (e) => console.log('Erro na fala:', e.error);
+        
+        // Forçar resume antes de falar (bug do Chrome Android)
+        this.speechSynthesis.resume();
         this.speechSynthesis.speak(utterance);
         
-        // Workaround adicional para alguns dispositivos Android
-        setTimeout(() => {
+        // Workaround: forçar resume repetidamente por um curto período
+        let attempts = 0;
+        const forceResume = setInterval(() => {
             if (this.speechSynthesis.paused) {
                 this.speechSynthesis.resume();
             }
-        }, 50);
+            attempts++;
+            if (attempts > 10 || this.speechSynthesis.speaking) {
+                clearInterval(forceResume);
+            }
+        }, 100);
     }
 
     loadVoices() {
