@@ -5,7 +5,7 @@
  */
 
 // ===== VERSÃO =====
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.2.0';
 const APP_BUILD_DATE = '2025-12-18';
 
 // ===== Classe Principal =====
@@ -131,6 +131,17 @@ class BloodPressureReader {
         this.captureBtn.addEventListener('click', () => this.captureAndRead());
         this.autoModeBtn.addEventListener('click', () => this.toggleAutoMode());
         this.repeatBtn.addEventListener('click', () => this.repeatLastReading());
+        
+        // Botão de teste de voz (importante para móveis!)
+        const testVoiceBtn = document.getElementById('test-voice-btn');
+        if (testVoiceBtn) {
+            testVoiceBtn.addEventListener('click', () => this.testVoice());
+        }
+    }
+    
+    testVoice() {
+        console.log('[VOZ] Teste de voz acionado pelo usuário');
+        this.speak('Teste de voz. Se você está ouvindo esta mensagem, a voz está funcionando corretamente. Versão ' + APP_VERSION);
     }
     
     setupKeyboardShortcuts() {
@@ -158,80 +169,57 @@ class BloodPressureReader {
         });
     }
     
-    // ===== Síntese de Voz (CORRIGIDA) =====
+    // ===== Síntese de Voz (v2.2 - SIMPLIFICADA) =====
     speak(text, priority = false) {
-        // Log para debug
-        console.log('[VOZ] Tentando falar:', text);
+        console.log('[VOZ v2.2] Falar:', text);
         
-        // Cancelar se prioritário
-        if (priority) {
-            this.speechSynthesis.cancel();
-            this.speechQueue = [];
-            this.isSpeaking = false;
+        // Cancelar fala anterior se prioritário
+        if (priority && window.speechSynthesis) {
+            window.speechSynthesis.cancel();
         }
         
-        this.speechQueue.push(text);
-        
-        // Forçar processamento
-        setTimeout(() => this.processNextSpeech(), 100);
+        // Usar função global simples
+        this.speakDirect(text);
     }
     
-    processNextSpeech() {
-        if (this.speechQueue.length === 0) return;
-        
-        // Verificar se o navegador está pronto
-        if (this.speechSynthesis.speaking || this.speechSynthesis.pending) {
-            // Tentar novamente em breve
-            setTimeout(() => this.processNextSpeech(), 200);
+    speakDirect(text) {
+        // Verificar suporte
+        if (!('speechSynthesis' in window)) {
+            console.error('[VOZ] Navegador não suporta síntese de voz');
+            alert('Seu navegador não suporta síntese de voz');
             return;
         }
         
-        const text = this.speechQueue.shift();
+        // Criar utterance
         const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'pt-BR';
+        utterance.rate = 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 1;
         
-        utterance.lang = this.config.language;
-        utterance.rate = this.config.speechRate;
-        utterance.pitch = this.config.speechPitch;
-        utterance.volume = this.config.speechVolume;
+        // Tentar encontrar voz em português
+        const voices = window.speechSynthesis.getVoices();
+        console.log('[VOZ] Vozes disponíveis:', voices.length);
         
-        // Buscar voz em português
-        const voices = this.speechSynthesis.getVoices();
-        const ptVoice = voices.find(v => v.lang.includes('pt-BR')) || 
-                        voices.find(v => v.lang.includes('pt')) ||
-                        voices[0];
-        if (ptVoice) {
-            utterance.voice = ptVoice;
-            console.log('[VOZ] Usando voz:', ptVoice.name);
+        for (const voice of voices) {
+            if (voice.lang.includes('pt')) {
+                utterance.voice = voice;
+                console.log('[VOZ] Usando:', voice.name, voice.lang);
+                break;
+            }
         }
         
-        utterance.onstart = () => { 
-            this.isSpeaking = true;
-            console.log('[VOZ] Iniciou fala');
-        };
+        // Eventos de debug
+        utterance.onstart = () => console.log('[VOZ] Começou a falar');
+        utterance.onend = () => console.log('[VOZ] Terminou de falar');
+        utterance.onerror = (e) => console.error('[VOZ] ERRO:', e);
         
-        utterance.onend = () => { 
-            this.isSpeaking = false;
-            console.log('[VOZ] Terminou fala');
-            // Processar próximo item da fila
-            if (this.speechQueue.length > 0) {
-                setTimeout(() => this.processNextSpeech(), 100);
-            }
-        };
-        
-        utterance.onerror = (e) => { 
-            this.isSpeaking = false;
-            console.error('[VOZ] Erro:', e.error);
-            // Tentar próximo mesmo com erro
-            if (this.speechQueue.length > 0) {
-                setTimeout(() => this.processNextSpeech(), 100);
-            }
-        };
-        
-        try {
-            this.speechSynthesis.speak(utterance);
-        } catch (e) {
-            console.error('[VOZ] Exceção ao falar:', e);
-        }
+        // Falar
+        window.speechSynthesis.speak(utterance);
+    }
+    
+    processNextSpeech() {
+        // Mantido para compatibilidade mas não usado
     }
     
     // ===== Inicialização do Tesseract =====
