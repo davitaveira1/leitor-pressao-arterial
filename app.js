@@ -1,4 +1,4 @@
-// VERSAO 3.0.0 - Fallback com ResponsiveVoice API
+// VERSAO 3.1.0 - ResponsiveVoice pre-carregado
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -117,12 +117,17 @@ class BloodPressureReader {
         this.voiceEnabled = true;
         this.hideVoiceModal();
         
-        // Listar todas as vozes disponíveis para debug
-        const voices = this.speechSynthesis.getVoices();
-        console.log('Vozes disponíveis:', voices.map(v => `${v.name} (${v.lang})`));
-        
-        // Tentar falar com Web Speech API primeiro
-        this.trySpeechSynthesis('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+        // Em mobile, usar ResponsiveVoice diretamente (mais confiável)
+        if (this.isMobileDevice()) {
+            console.log('Dispositivo móvel detectado - usando ResponsiveVoice');
+            this.useResponsiveVoice = true;
+            this.speakWithResponsiveVoice('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+        } else {
+            // Desktop - tentar Web Speech API
+            const voices = this.speechSynthesis.getVoices();
+            console.log('Vozes disponíveis:', voices.map(v => `${v.name} (${v.lang})`));
+            this.trySpeechSynthesis('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+        }
     }
 
     // Tenta Web Speech API, se falhar usa ResponsiveVoice
@@ -166,29 +171,60 @@ class BloodPressureReader {
 
     // Fallback usando ResponsiveVoice (API externa gratuita)
     speakWithResponsiveVoice(text) {
-        if (typeof responsiveVoice !== 'undefined') {
+        console.log('speakWithResponsiveVoice chamado com:', text);
+        console.log('responsiveVoice disponível:', typeof responsiveVoice !== 'undefined');
+        
+        if (typeof responsiveVoice !== 'undefined' && responsiveVoice.voiceSupport()) {
+            console.log('ResponsiveVoice suportado, tentando falar...');
+            
+            // Verificar vozes disponíveis
+            const rvVoices = responsiveVoice.getVoices();
+            console.log('Vozes ResponsiveVoice:', rvVoices);
+            
             responsiveVoice.speak(text, "Brazilian Portuguese Female", {
                 pitch: 1,
                 rate: 0.9,
                 volume: 1,
-                onstart: () => console.log('ResponsiveVoice iniciou'),
-                onend: () => console.log('ResponsiveVoice terminou'),
-                onerror: (e) => console.log('ResponsiveVoice erro:', e)
+                onstart: () => {
+                    console.log('ResponsiveVoice iniciou!');
+                    this.isSpeaking = true;
+                },
+                onend: () => {
+                    console.log('ResponsiveVoice terminou');
+                    this.isSpeaking = false;
+                },
+                onerror: (e) => {
+                    console.log('ResponsiveVoice erro:', e);
+                    this.isSpeaking = false;
+                    // Tentar com outra voz
+                    this.tryAlternativeVoice(text);
+                }
             });
         } else {
-            console.log('ResponsiveVoice não carregado, tentando carregar...');
-            // Carregar ResponsiveVoice dinamicamente
-            const script = document.createElement('script');
-            script.src = 'https://code.responsivevoice.org/responsivevoice.js?key=FREE';
-            script.onload = () => {
-                setTimeout(() => {
-                    this.speakWithResponsiveVoice(text);
-                }, 500);
-            };
-            script.onerror = () => {
-                alert('Não foi possível carregar o sistema de voz. Verifique sua conexão com a internet.');
-            };
-            document.head.appendChild(script);
+            console.log('ResponsiveVoice não disponível ou não suportado');
+            alert('Sistema de voz não disponível. Verifique sua conexão com a internet.');
+        }
+    }
+
+    // Tenta vozes alternativas do ResponsiveVoice
+    tryAlternativeVoice(text) {
+        const alternativeVoices = [
+            "Portuguese Female",
+            "Spanish Latin American Female", 
+            "US English Female"
+        ];
+        
+        for (const voice of alternativeVoices) {
+            try {
+                console.log('Tentando voz alternativa:', voice);
+                responsiveVoice.speak(text, voice, {
+                    onstart: () => console.log('Voz alternativa funcionou:', voice),
+                    onerror: () => console.log('Voz alternativa falhou:', voice)
+                });
+                break;
+            } catch (e) {
+                console.log('Erro com voz:', voice, e);
+            }
         }
     }
 
