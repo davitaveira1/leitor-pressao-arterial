@@ -1,4 +1,4 @@
-// VERSAO 3.4.0 - OCR otimizado para displays 7-segmentos
+// VERSAO 3.5.0 - OCR simplificado para debug
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -493,71 +493,10 @@ class BloodPressureReader {
         const ctx = this.canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(this.video, 0, 0);
         
-        // Pré-processar imagem para melhorar OCR de displays 7-segmentos
-        const processedImageData = this.preprocessImage(ctx);
+        // Capturar imagem SEM pré-processamento primeiro (teste)
+        const imageData = this.canvas.toDataURL('image/png');
         
-        await this.performOCR(processedImageData);
-    }
-
-    // Pré-processamento de imagem para displays de 7 segmentos
-    preprocessImage(ctx) {
-        const width = this.canvas.width;
-        const height = this.canvas.height;
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-        
-        // 1. Converter para escala de cinza e aumentar contraste
-        for (let i = 0; i < data.length; i += 4) {
-            // Escala de cinza
-            const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-            
-            // Aumentar contraste
-            const contrast = 1.5;
-            const factor = (259 * (contrast * 100 + 255)) / (255 * (259 - contrast * 100));
-            let newGray = factor * (gray - 128) + 128;
-            newGray = Math.max(0, Math.min(255, newGray));
-            
-            data[i] = newGray;     // R
-            data[i + 1] = newGray; // G
-            data[i + 2] = newGray; // B
-        }
-        
-        // 2. Binarização (threshold adaptativo)
-        // Calcular threshold médio
-        let sum = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            sum += data[i];
-        }
-        const avgBrightness = sum / (data.length / 4);
-        const threshold = avgBrightness * 0.6; // Threshold adaptativo
-        
-        // Aplicar binarização - dígitos escuros em fundo claro
-        for (let i = 0; i < data.length; i += 4) {
-            const value = data[i] < threshold ? 0 : 255;
-            data[i] = value;
-            data[i + 1] = value;
-            data[i + 2] = value;
-        }
-        
-        // 3. Inverter se necessário (OCR funciona melhor com texto preto em fundo branco)
-        // Contar pixels pretos vs brancos
-        let blackPixels = 0;
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i] === 0) blackPixels++;
-        }
-        
-        // Se mais da metade é preta, inverter (assumindo que dígitos são minoria)
-        if (blackPixels > (data.length / 4) / 2) {
-            for (let i = 0; i < data.length; i += 4) {
-                data[i] = 255 - data[i];
-                data[i + 1] = 255 - data[i + 1];
-                data[i + 2] = 255 - data[i + 2];
-            }
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        
-        return this.canvas.toDataURL('image/png');
+        await this.performOCR(imageData);
     }
 
     async performOCR(imageData) {
@@ -566,26 +505,28 @@ class BloodPressureReader {
             
             this.resultsContainer.innerHTML = '<p class="processing">Processando...</p>';
             
-            // Configurações otimizadas para dígitos de displays
+            console.log('Iniciando OCR...');
+            
+            // Usar Tesseract com configuração simplificada
             const result = await Tesseract.recognize(
                 imageData,
-                'eng',
+                'eng', // Idioma
                 {
                     logger: m => {
                         if (m.status === 'recognizing text') {
                             const progress = Math.round(m.progress * 100);
-                            if (progress % 50 === 0) {
-                                console.log(`Progresso: ${progress}%`);
-                            }
+                            console.log(`Progresso: ${progress}%`);
                         }
-                    },
-                    // Configurações para melhor reconhecimento de dígitos
-                    tessedit_char_whitelist: '0123456789',
-                    tessedit_pageseg_mode: '6', // Assume um bloco uniforme de texto
+                    }
                 }
             );
             
-            console.log('Texto reconhecido:', result.data.text);
+            console.log('=== RESULTADO OCR ===');
+            console.log('Texto completo:', result.data.text);
+            console.log('Confiança:', result.data.confidence);
+            console.log('Palavras:', result.data.words?.map(w => `${w.text}(${w.confidence})`));
+            console.log('====================');
+            
             this.processOCRResult(result.data.text);
             
         } catch (error) {
