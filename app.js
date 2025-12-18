@@ -1,4 +1,4 @@
-// VERSAO 2.6.0 - Correcao de voz para dispositivos moveis
+// VERSAO 2.7.0 - Correcao robusta de voz para dispositivos moveis
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e OCR
@@ -33,6 +33,7 @@ class BloodPressureReader {
         this.speechSynthesis = window.speechSynthesis;
         this.selectedVoice = null;
         this.voiceEnabled = false;
+        this.voicesLoaded = false;
         
         this.init();
     }
@@ -45,11 +46,9 @@ class BloodPressureReader {
 
     async init() {
         this.setupEventListeners();
-        this.loadVoices();
         
-        if (this.speechSynthesis.onvoiceschanged !== undefined) {
-            this.speechSynthesis.onvoiceschanged = () => this.loadVoices();
-        }
+        // Carregar vozes de forma assíncrona
+        await this.loadVoicesAsync();
         
         // Em dispositivos móveis, mostrar modal para ativar voz
         if (this.isMobileDevice()) {
@@ -60,6 +59,45 @@ class BloodPressureReader {
                 this.speak('Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
             }, 1000);
         }
+    }
+
+    loadVoicesAsync() {
+        return new Promise((resolve) => {
+            const voices = this.speechSynthesis.getVoices();
+            
+            if (voices.length > 0) {
+                this.setVoice(voices);
+                resolve();
+            } else {
+                // Esperar vozes carregarem
+                this.speechSynthesis.onvoiceschanged = () => {
+                    const loadedVoices = this.speechSynthesis.getVoices();
+                    this.setVoice(loadedVoices);
+                    resolve();
+                };
+                
+                // Timeout de segurança
+                setTimeout(() => {
+                    const fallbackVoices = this.speechSynthesis.getVoices();
+                    this.setVoice(fallbackVoices);
+                    resolve();
+                }, 2000);
+            }
+        });
+    }
+
+    setVoice(voices) {
+        const portugueseVoices = voices.filter(voice => 
+            voice.lang.startsWith('pt')
+        );
+        
+        if (portugueseVoices.length > 0) {
+            this.selectedVoice = portugueseVoices.find(v => v.lang === 'pt-BR') || portugueseVoices[0];
+        } else if (voices.length > 0) {
+            this.selectedVoice = voices[0];
+        }
+        this.voicesLoaded = true;
+        console.log('Voz selecionada:', this.selectedVoice ? this.selectedVoice.name : 'padrão');
     }
 
     showVoiceModal() {
@@ -78,29 +116,45 @@ class BloodPressureReader {
         this.voiceEnabled = true;
         this.hideVoiceModal();
         
-        // Falar imediatamente após ativação do usuário
-        const utterance = new SpeechSynthesisUtterance('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+        // Forçar cancelamento de qualquer fala pendente
+        this.speechSynthesis.cancel();
+        
+        // Pequeno delay para garantir que o cancel foi processado
+        setTimeout(() => {
+            this.speakDirect('Voz ativada! Aplicação pronta para uso. Pressione o botão iniciar câmera para começar.');
+        }, 100);
+    }
+
+    // Fala direta sem usar a fila - para garantir funcionamento no mobile
+    speakDirect(text) {
+        const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'pt-BR';
         utterance.rate = 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 1;
         
         if (this.selectedVoice) {
             utterance.voice = this.selectedVoice;
         }
         
+        // Workaround para Chrome mobile - precisa de resume
+        if (this.speechSynthesis.paused) {
+            this.speechSynthesis.resume();
+        }
+        
         this.speechSynthesis.speak(utterance);
+        
+        // Workaround adicional para alguns dispositivos Android
+        setTimeout(() => {
+            if (this.speechSynthesis.paused) {
+                this.speechSynthesis.resume();
+            }
+        }, 50);
     }
 
     loadVoices() {
         const voices = this.speechSynthesis.getVoices();
-        const portugueseVoices = voices.filter(voice => 
-            voice.lang.startsWith('pt')
-        );
-        
-        if (portugueseVoices.length > 0) {
-            this.selectedVoice = portugueseVoices.find(v => v.lang === 'pt-BR') || portugueseVoices[0];
-        } else if (voices.length > 0) {
-            this.selectedVoice = voices[0];
-        }
+        this.setVoice(voices);
     }
 
     speak(text, priority = false) {
@@ -139,12 +193,25 @@ class BloodPressureReader {
             this.processNextSpeech();
         };
         
-        utterance.onerror = () => {
+        utterance.onerror = (event) => {
+            console.log('Erro na fala:', event.error);
             this.isSpeaking = false;
             this.processNextSpeech();
         };
         
+        // Workaround para Chrome mobile
+        if (this.speechSynthesis.paused) {
+            this.speechSynthesis.resume();
+        }
+        
         this.speechSynthesis.speak(utterance);
+        
+        // Workaround adicional para Android
+        setTimeout(() => {
+            if (this.speechSynthesis.paused) {
+                this.speechSynthesis.resume();
+            }
+        }, 50);
     }
 
     setupEventListeners() {
