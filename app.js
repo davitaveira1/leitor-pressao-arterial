@@ -764,8 +764,6 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
     }
 
     displayAndAnnounceResults(systolic, diastolic, pulse) {
-        const classification = this.classifyPressure(systolic, diastolic);
-        
         let html = `
             <div class="reading-result">
                 <div class="pressure-values">
@@ -793,20 +791,15 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
             `;
         }
         
-        html += `
-                <div class="classification ${classification.class}">
-                    <span class="classification-label">Classificação:</span>
-                    <span class="classification-value">${classification.label}</span>
-                </div>
-            </div>
-        `;
+        html += `</div>`;
         
         this.resultsContainer.innerHTML = html;
         this.repeatBtn.disabled = false;
         
-        let announcement = `Leitura concluída. Pressão ${systolic} por ${diastolic}. ${classification.label}.`;
+        // Apenas ler os valores, sem diagnóstico
+        let announcement = `Pressão: ${systolic} por ${diastolic}.`;
         if (pulse) {
-            announcement += ` Pulso: ${pulse} batimentos por minuto.`;
+            announcement += ` Pulso: ${pulse}.`;
         }
         
         this.speak(announcement, true);
@@ -860,11 +853,10 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
         }
         
         const { systolic, diastolic, pulse } = this.lastReading;
-        const classification = this.classifyPressure(systolic, diastolic);
         
-        let announcement = `Última leitura: Pressão ${systolic} por ${diastolic}. ${classification.label}.`;
+        let announcement = `Pressão: ${systolic} por ${diastolic}.`;
         if (pulse) {
-            announcement += ` Pulso: ${pulse} batimentos por minuto.`;
+            announcement += ` Pulso: ${pulse}.`;
         }
         
         this.speak(announcement, true);
