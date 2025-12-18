@@ -7,7 +7,7 @@
 
 // Configuração do Groq - API Key armazenada localmente no navegador
 const GROQ_CONFIG = {
-    model: 'llama-3.2-90b-vision-preview',
+    model: 'llama-3.2-11b-vision-preview',
     apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
     getApiKey: function() {
         let key = localStorage.getItem('groq_api_key');
