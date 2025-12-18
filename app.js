@@ -1,20 +1,20 @@
-// VERSAO 4.2.0 - Integração com OpenRouter (Qwen Vision)
+// VERSAO 4.3.0 - Integração com Google Gemini 2.5 Flash
 /**
  * Leitor de Pressão Arterial Acessível
  * Aplicação para leitura de medidores de pressão usando câmera e IA
  * Desenvolvido com foco em acessibilidade para pessoas cegas
  */
 
-// Configuração do OpenRouter - API Key armazenada localmente no navegador
+// Configuração do Gemini - API Key armazenada localmente no navegador
 const AI_CONFIG = {
-    model: 'qwen/qwen2.5-vl-7b-instruct:free',
-    apiUrl: 'https://openrouter.ai/api/v1/chat/completions',
+    model: 'gemini-2.5-flash',
+    apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
     getApiKey: function() {
-        let key = localStorage.getItem('openrouter_api_key');
+        let key = localStorage.getItem('gemini_api_key');
         if (!key) {
-            key = prompt('Digite sua API Key do OpenRouter (obtenha em openrouter.ai/keys):');
+            key = prompt('Digite sua API Key do Google Gemini (obtenha em aistudio.google.com/apikey):');
             if (key) {
-                localStorage.setItem('openrouter_api_key', key);
+                localStorage.setItem('gemini_api_key', key);
             }
         }
         return key;
@@ -519,6 +519,9 @@ class BloodPressureReader {
             this.speak('Analisando imagem. Aguarde...');
             this.resultsContainer.innerHTML = '<p class="processing">Analisando com IA...</p>';
             
+            // Remover o prefixo "data:image/jpeg;base64," para enviar só o base64
+            const base64Image = imageDataUrl.split(',')[1];
+            
             const prompt = `Analise esta imagem de um medidor de pressão arterial digital.
 
 IMPORTANTE: Leia os números exibidos no display LCD/LED do aparelho.
@@ -537,26 +540,21 @@ Se não conseguir ler os números claramente, retorne:
 Retorne SOMENTE o JSON, sem explicações adicionais.`;
 
             const requestBody = {
-                model: AI_CONFIG.model,
-                messages: [
-                    {
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'text',
-                                text: prompt
-                            },
-                            {
-                                type: 'image_url',
-                                image_url: {
-                                    url: imageDataUrl
-                                }
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        {
+                            inline_data: {
+                                mime_type: 'image/jpeg',
+                                data: base64Image
                             }
-                        ]
-                    }
-                ],
-                temperature: 0.1,
-                max_tokens: 200
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 200
+                }
             };
 
             const apiKey = AI_CONFIG.getApiKey();
@@ -566,28 +564,28 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
                 return;
             }
 
-            const response = await fetch(AI_CONFIG.apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
-                    'HTTP-Referer': window.location.href,
-                    'X-Title': 'Leitor de Pressão Arterial'
-                },
-                body: JSON.stringify(requestBody)
-            });
+            const response = await fetch(
+                `${AI_CONFIG.apiUrl}/${AI_CONFIG.model}:generateContent?key=${apiKey}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                }
+            );
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error('Erro OpenRouter:', errorData);
+                console.error('Erro Gemini:', errorData);
                 throw new Error(`Erro na API: ${response.status}`);
             }
 
             const data = await response.json();
-            console.log('Resposta OpenRouter:', data);
+            console.log('Resposta Gemini:', data);
 
             // Extrair o texto da resposta
-            const responseText = data.choices?.[0]?.message?.content;
+            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
             console.log('Texto da resposta:', responseText);
 
             if (!responseText) {
@@ -598,7 +596,7 @@ Retorne SOMENTE o JSON, sem explicações adicionais.`;
             this.processAIResponse(responseText);
 
         } catch (error) {
-            console.error('Erro ao analisar com OpenRouter:', error);
+            console.error('Erro ao analisar com Gemini:', error);
             this.speak('Erro ao analisar imagem. Verifique sua conexão e tente novamente.', true);
             this.resultsContainer.innerHTML = `<p class="error">Erro: ${error.message}. Tente novamente.</p>`;
         }
