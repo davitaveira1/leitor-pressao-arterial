@@ -1,9 +1,16 @@
-// VERSAO 3.5.0 - OCR simplificado para debug
+// VERSAO 4.0.0 - Integração com Google Gemini Vision AI
 /**
  * Leitor de Pressão Arterial Acessível
- * Aplicação para leitura de medidores de pressão usando câmera e OCR
+ * Aplicação para leitura de medidores de pressão usando câmera e IA
  * Desenvolvido com foco em acessibilidade para pessoas cegas
  */
+
+// Configuração do Gemini
+const GEMINI_CONFIG = {
+    apiKey: 'AIzaSyASHpH7dB6uu9_GlKc3NVCyXE-ilHZIGPo',
+    model: 'gemini-2.0-flash-exp',
+    apiUrl: 'https://generativelanguage.googleapis.com/v1beta/models'
+};
 
 class BloodPressureReader {
     constructor() {
@@ -34,7 +41,7 @@ class BloodPressureReader {
         this.selectedVoice = null;
         this.voiceEnabled = false;
         this.voicesLoaded = false;
-        this.useAudioTTS = false; // Flag para usar Google TTS via Audio
+        this.useGemini = true; // Usar Gemini como padrão
         
         this.init();
     }
@@ -493,10 +500,145 @@ class BloodPressureReader {
         const ctx = this.canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(this.video, 0, 0);
         
-        // Capturar imagem SEM pré-processamento primeiro (teste)
-        const imageData = this.canvas.toDataURL('image/png');
+        // Capturar imagem como base64
+        const imageData = this.canvas.toDataURL('image/jpeg', 0.8);
         
-        await this.performOCR(imageData);
+        if (this.useGemini) {
+            await this.analyzeWithGemini(imageData);
+        } else {
+            await this.performOCR(imageData);
+        }
+    }
+
+    async analyzeWithGemini(imageDataUrl) {
+        try {
+            this.speak('Analisando imagem com inteligência artificial. Aguarde...');
+            this.resultsContainer.innerHTML = '<p class="processing">Analisando com IA...</p>';
+            
+            // Remover o prefixo "data:image/jpeg;base64," para enviar só o base64
+            const base64Image = imageDataUrl.split(',')[1];
+            
+            const prompt = `Analise esta imagem de um medidor de pressão arterial digital.
+            
+IMPORTANTE: Leia os números exibidos no display LCD/LED do aparelho.
+
+Retorne APENAS um JSON no formato:
+{"sistolica": numero, "diastolica": numero, "pulso": numero ou null}
+
+Onde:
+- sistolica: pressão sistólica (número maior, geralmente entre 90-180)
+- diastolica: pressão diastólica (número menor, geralmente entre 50-120)
+- pulso: batimentos por minuto (se visível, senão null)
+
+Se não conseguir ler os números claramente, retorne:
+{"erro": "descrição do problema"}
+
+Retorne SOMENTE o JSON, sem explicações adicionais.`;
+
+            const requestBody = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        {
+                            inline_data: {
+                                mime_type: 'image/jpeg',
+                                data: base64Image
+                            }
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 200
+                }
+            };
+
+            const response = await fetch(
+                `${GEMINI_CONFIG.apiUrl}/${GEMINI_CONFIG.model}:generateContent?key=${GEMINI_CONFIG.apiKey}`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                }
+            );
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error('Erro Gemini:', errorData);
+                throw new Error(`Erro na API: ${response.status}`);
+            }
+
+            const data = await response.json();
+            console.log('Resposta Gemini:', data);
+
+            // Extrair o texto da resposta
+            const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            console.log('Texto da resposta:', responseText);
+
+            if (!responseText) {
+                throw new Error('Resposta vazia da IA');
+            }
+
+            // Parsear o JSON da resposta
+            this.processGeminiResponse(responseText);
+
+        } catch (error) {
+            console.error('Erro ao analisar com Gemini:', error);
+            this.speak('Erro ao analisar imagem. Verifique sua conexão e tente novamente.', true);
+            this.resultsContainer.innerHTML = `<p class="error">Erro: ${error.message}. Tente novamente.</p>`;
+        }
+    }
+
+    processGeminiResponse(responseText) {
+        try {
+            // Limpar o texto - remover markdown se houver
+            let cleanText = responseText.trim();
+            cleanText = cleanText.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+            cleanText = cleanText.trim();
+            
+            console.log('JSON limpo:', cleanText);
+            
+            const result = JSON.parse(cleanText);
+            
+            if (result.erro) {
+                this.speak(`Não foi possível ler o display. ${result.erro}`, true);
+                this.resultsContainer.innerHTML = `<p class="error">${result.erro}. Tente novamente.</p>`;
+                return;
+            }
+            
+            const systolic = parseInt(result.sistolica);
+            const diastolic = parseInt(result.diastolica);
+            const pulse = result.pulso ? parseInt(result.pulso) : null;
+            
+            // Validações
+            if (isNaN(systolic) || isNaN(diastolic)) {
+                this.speak('Valores não identificados. Reposicione o medidor e tente novamente.', true);
+                this.resultsContainer.innerHTML = '<p class="error">Valores não identificados. Tente novamente.</p>';
+                return;
+            }
+            
+            if (systolic < 60 || systolic > 250 || diastolic < 30 || diastolic > 150) {
+                this.speak('Valores fora do esperado. Reposicione o medidor e tente novamente.', true);
+                this.resultsContainer.innerHTML = '<p class="error">Valores fora do esperado. Tente novamente.</p>';
+                return;
+            }
+            
+            if (systolic <= diastolic) {
+                this.speak('Valores parecem incorretos. A sistólica deve ser maior que a diastólica.', true);
+                this.resultsContainer.innerHTML = '<p class="error">Valores inconsistentes. Tente novamente.</p>';
+                return;
+            }
+            
+            this.lastReading = { systolic, diastolic, pulse };
+            this.displayAndAnnounceResults(systolic, diastolic, pulse);
+            
+        } catch (error) {
+            console.error('Erro ao processar resposta:', error);
+            this.speak('Erro ao interpretar a leitura. Tente novamente.', true);
+            this.resultsContainer.innerHTML = '<p class="error">Erro ao interpretar. Tente novamente.</p>';
+        }
     }
 
     async performOCR(imageData) {
