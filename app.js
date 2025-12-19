@@ -7,7 +7,7 @@
 
 // Configuração da OpenAI - API Key armazenada localmente no navegador
 const AI_CONFIG = {
-    model: 'gpt-4o',
+    model: 'gpt-4o-mini',
     apiUrl: 'https://api.openai.com/v1/chat/completions',
     getApiKey: function() {
         let key = localStorage.getItem('openai_api_key');
